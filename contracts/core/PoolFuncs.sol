@@ -16,7 +16,7 @@ abstract contract PoolFuncs {
 
     // UniSwap router that all Uni transactions are done through,
     // 0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D on Mainnet.
-    IUniPool public uniRouter;
+    IUniRouter public uniRouter;
 
     IERC20 public lpToken;
     // address(0) if Ether.
@@ -34,15 +34,18 @@ abstract contract PoolFuncs {
         baseToken0 = IERC20(_baseTokens[0]);
         baseToken1 = IERC20(_baseTokens[1]);
         
-        uniRouter = IUniPool(_uniRouter);
+        uniRouter = IUniRouter(_uniRouter);
         
         require(_baseTokens[0] != _baseTokens[1], "Should have 2 base tokens");
+        //this will prevent from reverting when base == ETH
         if(address(baseToken0) != address(0)){
             baseToken0.approve( address(uniRouter), uint256(-1) );
         }
         if(address(baseToken1) != address(0)){
             baseToken1.approve( address(uniRouter), uint256(-1) );
         }
+
+        // path verification would be nice
         path0 = _path0;
         path1 = _path1;
     }

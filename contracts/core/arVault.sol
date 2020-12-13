@@ -44,7 +44,6 @@ contract ArVault is Ownable, RewardManager, PoolFuncs {
      * @param _path0 and _path1 set the Uniswap paths to exchange the token for Ether.
      * @param _uniRouter The main Uniswap router contract.
      * @param _lpToken The LP token we're farming/covering.
-     * @param _lpPool Address of the pool to unwrap the LP token.
      * @param _rewardToken The token being rewarded (ARMOR).
      * @param _feePerSec The fee (in 18 decimal percent, i.e. 1% == 1e18) charged per second for coverage.
      * @param _balanceManager _claimManager and _planManager are addresses of the arCore contracts.
@@ -151,5 +150,15 @@ contract ArVault is Ownable, RewardManager, PoolFuncs {
         balanceManager.withdraw(_amount);
         owner().transfer(address(this).balance);
     }
-    
+
+    /**
+     * @dev Unwrap LP token on Uniswap.
+     * @param _amount The amount of tokens to be unwrapped.
+    **/
+    function unwrapLP(uint256 _amount)
+      internal
+      override
+    {
+        IUniPool(address(lpToken)).burn(_amount);
+    }
 }
