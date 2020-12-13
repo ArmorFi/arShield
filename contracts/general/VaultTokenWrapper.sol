@@ -17,6 +17,10 @@ contract VaultTokenWrapper {
     
     mapping(address => uint256) private _balances;
 
+    function initializeVaultTokenWrapper(address _token) internal {
+        stakeToken = IERC20(_token);
+    }
+
     function totalSupply() public view returns (uint256) {
         return _totalSupply;
     }

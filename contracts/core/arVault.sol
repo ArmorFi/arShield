@@ -13,7 +13,7 @@ import '../interfaces/IBalanceManager.sol';
  * @dev Vault to allow LPs to gain LP rewards and ARMOR tokens while being protected from hacks with coverage for the protocol.
  * @author Robert M.C. Forster
 **/
-contract ArUniVault is Ownable, RewardManager, PoolFuncs {
+contract ArVault is Ownable, RewardManager, PoolFuncs {
 
     // The protocol that this contract buys coverage for (Nexus Mutual address for Uniswap/Balancer/etc.).
     address public protocol;
@@ -50,29 +50,29 @@ contract ArUniVault is Ownable, RewardManager, PoolFuncs {
      * @param _balanceManager _claimManager and _planManager are addresses of the arCore contracts.
      * @param _protocol The address of the protocol (from Nexus Mutual) that we're buying coverage for.
     **/
-    constructor(address[] memory _baseTokens, 
-                address[] memory _path0,
-                address[] memory _path1,
-                address _uniRouter,
-                address _lpToken,
-                address _lpPool,
-                address _rewardToken, 
-                uint256 _feePerSec, 
-                address _balanceManager,
-                address _claimManager,
-                address _planManager,
-                address _protocol)
+    constructor(
+        address[] memory _baseTokens, 
+        address[] memory _path0,
+        address[] memory _path1,
+        address _uniRouter,
+        address _lpToken,
+        address _rewardToken, 
+        uint256 _feePerSec, 
+        address _balanceManager,
+        address _claimManager,
+        address _planManager,
+        address _protocol
+    )
       public
     {
         planManager = IPlanManager(_planManager);
         claimManager = IClaimManager(_claimManager);
         balanceManager = IBalanceManager(_balanceManager);
         rewardInitialize(_rewardToken, _lpToken, msg.sender, _feePerSec);
-        ammInitialize(_uniRouter, _lpToken, _lpPool, _baseTokens, _path0, _path1);
+        ammInitialize(_uniRouter, _lpToken, _baseTokens, _path0, _path1);
+        initializeVaultTokenWrapper(_lpToken);
         protocol = _protocol;
-        
-        oldAmount.push(0);
-        newAmount.push(0);
+
         newProtocol.push(_protocol);
     }
     
@@ -86,9 +86,8 @@ contract ArUniVault is Ownable, RewardManager, PoolFuncs {
         // There shouldn't ever be an Ether balance in here but just in case there is...
         uint256 balance = address(this).balance;
         
-        // Unwrap then sell for Ether.
-        if (protocol == UNISWAP) uniUnwrapLP(feePool);
-        else balUnwrapLP(feePool);
+        // Unwrap then sell for Ether
+        unwrapLP(feePool);
         sellTokens();
         
         uint256 newBalance = address(this).balance.sub(balance);
@@ -117,7 +116,8 @@ contract ArUniVault is Ownable, RewardManager, PoolFuncs {
     {
         newAmount[0] = _amount;
         planManager.updatePlan(oldProtocol, oldAmount, newProtocol, newAmount);
-        oldAmount[0] = _amount;
+        if (oldAmount.length == 0) oldAmount.push(_amount);
+        else oldAmount[0] = _amount;
         if (oldProtocol.length == 0) oldProtocol.push(protocol);
     }
     
