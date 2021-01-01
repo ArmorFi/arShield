@@ -9,11 +9,11 @@ import '../interfaces/IClaimManager.sol';
 import '../interfaces/IBalanceManager.sol';
 
 /**
- * @title Armor Vault
+ * @title Armor Shield LP
  * @dev Vault to allow LPs to gain LP rewards and ARMOR tokens while being protected from hacks with coverage for the protocol.
  * @author Robert M.C. Forster
 **/
-contract ArVault is Ownable, RewardManager, PoolFuncs {
+contract ArShieldLP is Ownable, RewardManager, PoolFuncs {
 
     // The protocol that this contract buys coverage for (Nexus Mutual address for Uniswap/Balancer/etc.).
     address public protocol;
@@ -46,32 +46,34 @@ contract ArVault is Ownable, RewardManager, PoolFuncs {
      * @param _lpToken The LP token we're farming/covering.
      * @param _rewardToken The token being rewarded (ARMOR).
      * @param _feePerSec The fee (in 18 decimal percent, i.e. 1% == 1e18) charged per second for coverage.
-     * @param _balanceManager _claimManager and _planManager are addresses of the arCore contracts.
      * @param _protocol The address of the protocol (from Nexus Mutual) that we're buying coverage for.
     **/
     constructor(
         address[] memory _baseTokens, 
         address[] memory _path0,
         address[] memory _path1,
+        address[] memory _managers,
         address _uniRouter,
         address _lpToken,
         address _rewardToken, 
         uint256 _feePerSec,
         uint256 _referPercent,
-        address _balanceManager,
-        address _claimManager,
-        address _planManager,
-        address _protocol
+        address _protocol,
+        uint256 _lpStartingPrice
     )
       public
     {
-        planManager = IPlanManager(_planManager);
-        claimManager = IClaimManager(_claimManager);
-        balanceManager = IBalanceManager(_balanceManager);
+        planManager = IPlanManager(_managers[0]);
+        claimManager = IClaimManager(_managers[1]);
+        balanceManager = IBalanceManager(_managers[2]);
+        stakeManager = IStakeManager(_managers[3]);
         rewardInitialize(_rewardToken, _lpToken, msg.sender, _feePerSec, _referPercent);
         ammInitialize(_uniRouter, _lpToken, _baseTokens, _path0, _path1);
         initializeVaultTokenWrapper(_lpToken);
         protocol = _protocol;
+
+        // Stack too deep...
+        tokenPrice = _lpStartingPrice;
 
         newProtocol.push(_protocol);
     }
@@ -92,11 +94,16 @@ contract ArVault is Ownable, RewardManager, PoolFuncs {
         
         uint256 newBalance = address(this).balance.sub(balance);
         // Do we need to make sure total supply is bigger than fee pool?
-        uint256 coverage = totalSupply() / feePool * newBalance;
+        uint256 fullCoverage = totalSupply() / feePool * newBalance;
+        
+        // Save the individual token price. 1e18 needed for decimals.
+        tokenPrice = fullCoverage * 1e18 / totalSupply();
+        
         // Reset fee pool.
         feePool = 0;
+        
         addBalance();
-        updateCoverage(coverage);
+        updateCoverage( allowedCoverage(fullCoverage) );
     }
     
     /**
@@ -144,6 +151,7 @@ contract ArVault is Ownable, RewardManager, PoolFuncs {
     /**
      * @dev Owner can withdraw balance from arCore if there is more than needed.
      * @param _amount The amount of Ether (in Wei) to withdraw from the arCore contract.
+     *      Do we want this to withdraw to here then allow users to withdraw?
     **/
     function withdrawBalance(uint256 _amount)
       external
