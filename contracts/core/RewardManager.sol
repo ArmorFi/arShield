@@ -108,7 +108,7 @@ contract RewardManager is VaultTokenWrapper, Ownable, IRewardDistributionRecipie
     function rewardInitialize(address _rewardToken, address _stakeToken, address _rewardDistribution, uint256 _feePerSec)
       internal
     {
-        Ownable.initialize();
+        Ownable.initializeOwnable();
         require(address(_rewardDistribution) == address(0), "Contract is already initialized.");
         stakeToken = IERC20(_stakeToken);
         rewardToken = IERC20(_rewardToken);
@@ -207,5 +207,4 @@ contract RewardManager is VaultTokenWrapper, Ownable, IRewardDistributionRecipie
         periodFinish = block.timestamp.add(DURATION);
         emit RewardAdded(reward);
     }
-    
 }

@@ -92,7 +92,7 @@ contract ArVault is Ownable, RewardManager, PoolFuncs {
         uint256 newBalance = address(this).balance.sub(balance);
         // Do we need to make sure total supply is bigger than fee pool?
         uint256 coverage = totalSupply() / feePool * newBalance;
-        
+
         addBalance();
         updateCoverage(coverage);
     }
