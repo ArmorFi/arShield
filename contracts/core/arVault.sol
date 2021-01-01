@@ -56,7 +56,8 @@ contract ArVault is Ownable, RewardManager, PoolFuncs {
         address _uniRouter,
         address _lpToken,
         address _rewardToken, 
-        uint256 _feePerSec, 
+        uint256 _feePerSec,
+        uint256 _referPercent,
         address _balanceManager,
         address _claimManager,
         address _planManager,
@@ -67,7 +68,7 @@ contract ArVault is Ownable, RewardManager, PoolFuncs {
         planManager = IPlanManager(_planManager);
         claimManager = IClaimManager(_claimManager);
         balanceManager = IBalanceManager(_balanceManager);
-        rewardInitialize(_rewardToken, _lpToken, msg.sender, _feePerSec);
+        rewardInitialize(_rewardToken, _lpToken, msg.sender, _feePerSec, _referPercent);
         ammInitialize(_uniRouter, _lpToken, _baseTokens, _path0, _path1);
         initializeVaultTokenWrapper(_lpToken);
         protocol = _protocol;
@@ -92,7 +93,8 @@ contract ArVault is Ownable, RewardManager, PoolFuncs {
         uint256 newBalance = address(this).balance.sub(balance);
         // Do we need to make sure total supply is bigger than fee pool?
         uint256 coverage = totalSupply() / feePool * newBalance;
-
+        // Reset fee pool.
+        feePool = 0;
         addBalance();
         updateCoverage(coverage);
     }

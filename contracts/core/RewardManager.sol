@@ -51,11 +51,20 @@ contract RewardManager is VaultTokenWrapper, Ownable, IRewardDistributionRecipie
     event Withdrawn(address indexed user, uint256 amount);
     event RewardPaid(address indexed user, uint256 reward);
 
+    // Denominator used to when distributing tokens 1000 == 100%
+    uint256 public constant DENOMINATOR = 1000;
+
     // Number of full Ether per full token. Only set if a claim is successful.
     uint256 public weiPerToken;
 
     // Last time that a user transferred funds--used to keep track of fees owed by users.
     mapping (address => uint256) public lastUpdate;
+    
+    // Referrers of users get paid a % of what 
+    mapping (address => address) public referrers;
+
+    // Percent of fee that referrers receive. 50 == 5%.
+    uint256 public referPercent;
 
     // Rate that will be paid (in %) per second for users using vault.
     // 1% == 1e18. Will start at 133164236000 for about 4.2% per year.
@@ -75,9 +84,11 @@ contract RewardManager is VaultTokenWrapper, Ownable, IRewardDistributionRecipie
         if (lastUpdate[account] != 0) {
             uint256 timeElapsed = block.timestamp.sub(lastUpdate[account]);
             uint256 percent = feePerSec * timeElapsed;
+            
             // 1e20 = 1e18 because percent is in that many decimals + 100 because it's a percent.
             uint256 fee = balanceOf(account) * percent / 1e20;
-            _updateStake(account, fee);
+            uint256 referFee = fee * referPercent / DENOMINATOR;
+            _updateStake(account, referrers[account], fee.sub(referFee), referFee);
         }
         _;
         lastUpdate[account] = block.timestamp;
@@ -86,6 +97,7 @@ contract RewardManager is VaultTokenWrapper, Ownable, IRewardDistributionRecipie
     modifier updateReward(address account) {
         rewardPerTokenStored = rewardPerToken();
         lastUpdateTime = lastTimeRewardApplicable();
+        
         if (account != address(0)) {
             rewards[account] = earned(account);
             userRewardPerTokenPaid[account] = rewardPerTokenStored;
@@ -105,7 +117,7 @@ contract RewardManager is VaultTokenWrapper, Ownable, IRewardDistributionRecipie
      * @param _rewardDistribution The address that will be sending ARMOR to this contract.
      * @param _feePerSec The % fee per second that will be charged to users. 1% = 1e18.
     **/
-    function rewardInitialize(address _rewardToken, address _stakeToken, address _rewardDistribution, uint256 _feePerSec)
+    function rewardInitialize(address _rewardToken, address _stakeToken, address _rewardDistribution, uint256 _feePerSec, uint256 _referPercent)
       internal
     {
         Ownable.initializeOwnable();
@@ -114,6 +126,7 @@ contract RewardManager is VaultTokenWrapper, Ownable, IRewardDistributionRecipie
         rewardToken = IERC20(_rewardToken);
         rewardDistribution = _rewardDistribution;
         feePerSec = _feePerSec;
+        referPercent = _referPercent;
     }
 
     function setRewardDistribution(address _rewardDistribution)
@@ -151,7 +164,12 @@ contract RewardManager is VaultTokenWrapper, Ownable, IRewardDistributionRecipie
     }
 
     // stake visibility is public as overriding LPTokenWrapper's stake() function
-    function stake(uint256 amount) public override notLocked updateBalance(msg.sender) updateReward(msg.sender) {
+    // Referrer will only set once. If it is address(0) upon first stake, it is set to devWallet.
+    function stake(uint256 amount, address _referrer) public notLocked updateBalance(msg.sender) updateReward(msg.sender) {
+        if ( referrers[msg.sender] == address(0) ) {
+            referrers[msg.sender] = _referrer != address(0) ? _referrer : owner();
+        }
+        
         require(amount > 0, "Cannot stake 0");
         super.stake(amount);
         emit Staked(msg.sender, amount);
@@ -206,5 +224,17 @@ contract RewardManager is VaultTokenWrapper, Ownable, IRewardDistributionRecipie
         lastUpdateTime = block.timestamp;
         periodFinish = block.timestamp.add(DURATION);
         emit RewardAdded(reward);
+    }
+    
+    /**
+     * @dev Owner may change the percent of insurance fees referrers receive.
+     * @param _referPercent The percent of fees referrers receive. 50 == 5%.
+    **/
+    function changeReferPercent(uint256 _referPercent)
+      external
+      onlyOwner
+    {
+        require(_referPercent <= 1000, "Cannot give more than 100% of fees.");
+        referPercent = _referPercent;
     }
 }

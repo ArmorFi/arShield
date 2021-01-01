@@ -16,6 +16,9 @@ contract VaultTokenWrapper {
     uint256 private _totalSupply;
     
     mapping(address => uint256) private _balances;
+    
+    // Armor is adding this to avoid too many balances updates in one call. Referrer funds do not gain rewards.
+    mapping (address => uint256) public referralBalances;
 
     function initializeVaultTokenWrapper(address _token) internal {
         stakeToken = IERC20(_token);
@@ -42,15 +45,30 @@ contract VaultTokenWrapper {
     }
     
     /**
+     * @dev Referral rewards withdrawn separately and have already been subtracted from total supply.
+     * @param _amount Amount of referral rewards to withdraw.
+    **/
+    function withdrawReferral(uint256 _amount)
+      external
+    {
+        // Throws on too high amount.
+        referralBalances[msg.sender] = referralBalances[msg.sender].sub(_amount);
+        stakeToken.safeTransfer(msg.sender, _amount);
+    }
+    
+    /**
      * @dev Only used by contract to update a user's balance by subtracting then adding to fee pool.
     **/
-    function _updateStake(address _user, uint256 _amount)
+    function _updateStake(address _user, address _referrer, uint256 _amount, uint256 _referAmount)
       internal
     {
-        _balances[_user] = _balances[_user].sub(_amount);
-        feePool = feePool.add(_amount);
+        _balances[_user] = _balances[_user].sub( _amount.add(_referAmount) );
+        referralBalances[_referrer] = referralBalances[_referrer].add(_referAmount);
+    
+        // Fee pool cannot include referral balance, but total supply must subtract.
+        feePool.add(_amount);
 
         // Even though these tokens are just moved to fee pool, total supply must lower so rewards distribute correctly.
-        _totalSupply = _totalSupply.sub(_amount);
+        _totalSupply = _totalSupply.sub( _amount.add(_referAmount) );
     }
 }
