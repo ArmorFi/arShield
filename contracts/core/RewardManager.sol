@@ -7,6 +7,7 @@ import '../general/VaultTokenWrapper.sol';
 import '../libraries/Math.sol';
 import '../libraries/SafeMath.sol';
 import '../interfaces/IERC20.sol';
+import '../interfaces/IStakeManager.sol';
 import '../interfaces/IRewardDistributionRecipient.sol';
 
 /**
@@ -36,6 +37,7 @@ import '../interfaces/IRewardDistributionRecipient.sol';
 contract RewardManager is VaultTokenWrapper, Ownable, IRewardDistributionRecipient {
     
     IERC20 public rewardToken;
+    IStakeManager public stakeManager;
     address public rewardDistribution;
     uint256 public constant DURATION = 7 days;
 
@@ -56,6 +58,9 @@ contract RewardManager is VaultTokenWrapper, Ownable, IRewardDistributionRecipie
 
     // Number of full Ether per full token. Only set if a claim is successful.
     uint256 public weiPerToken;
+    
+    // Price--in Ether--of each token.
+    uint256 public tokenPrice;
 
     // Last time that a user transferred funds--used to keep track of fees owed by users.
     mapping (address => uint256) public lastUpdate;
@@ -72,6 +77,12 @@ contract RewardManager is VaultTokenWrapper, Ownable, IRewardDistributionRecipie
 
     modifier notLocked {
         require(weiPerToken == 0, "A claim has been made successfully.");
+        _;
+    }
+
+    modifier checkCoverage(uint256 amount) {
+        uint256 available = allowedCoverage(tokenPrice * 1e18 / amount);
+        require(available >= amount, "Not enough coverage available for this stake.");
         _;
     }
 
@@ -165,7 +176,7 @@ contract RewardManager is VaultTokenWrapper, Ownable, IRewardDistributionRecipie
 
     // stake visibility is public as overriding LPTokenWrapper's stake() function
     // Referrer will only set once. If it is address(0) upon first stake, it is set to devWallet.
-    function stake(uint256 amount, address _referrer) public notLocked updateBalance(msg.sender) updateReward(msg.sender) {
+    function stake(uint256 amount, address _referrer) public checkCoverage(amount) notLocked updateBalance(msg.sender) updateReward(msg.sender) {
         if ( referrers[msg.sender] == address(0) ) {
             referrers[msg.sender] = _referrer != address(0) ? _referrer : owner();
         }
@@ -227,6 +238,20 @@ contract RewardManager is VaultTokenWrapper, Ownable, IRewardDistributionRecipie
     }
     
     /**
+     * @dev Checks how much coverage is allowed on the contract. Buys as much as possible.
+     *      Needed on this contract so we don't accept more funds than available as coverage.
+     * @param _fullCoverage The full amount of coverage we want.
+     * @return Amount of cover able to be purchased.
+    **/
+    function allowedCoverage(uint256 _fullCoverage)
+      internal
+    returns (uint256)
+    {
+        uint256 available = stakeManager.allowedCoverage();
+        return available >= _fullCoverage ? _fullCoverage : available;
+    }
+    
+    /**
      * @dev Owner may change the percent of insurance fees referrers receive.
      * @param _referPercent The percent of fees referrers receive. 50 == 5%.
     **/
@@ -237,4 +262,5 @@ contract RewardManager is VaultTokenWrapper, Ownable, IRewardDistributionRecipie
         require(_referPercent <= 1000, "Cannot give more than 100% of fees.");
         referPercent = _referPercent;
     }
+    
 }
