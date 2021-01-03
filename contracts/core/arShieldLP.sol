@@ -14,7 +14,7 @@ import '../interfaces/IBalanceManager.sol';
  * @dev Vault to allow LPs to gain LP rewards and ARMOR tokens while being protected from hacks with coverage for the protocol.
  * @author Robert M.C. Forster
 **/
-contract ArShieldLP is Ownable, RewardManagerWithRefferal, PoolFuncs {
+contract ArShieldLP is Ownable, RewardManagerWithReferral, PoolFuncs {
 
     // The protocol that this contract buys coverage for (Nexus Mutual address for Uniswap/Balancer/etc.).
     address public protocol;
@@ -127,7 +127,7 @@ contract ArShieldLP is Ownable, RewardManagerWithRefferal, PoolFuncs {
     }
 
     function stake(uint256 amount, address _referrer) public override checkCoverage(amount) {
-        RewardManagerWithRefferal.stake(amount,_referrer);
+        RewardManagerWithReferral.stake(amount,_referrer);
     }
     /**
      * @dev Checks how much coverage is allowed on the contract. Buys as much as possible.
