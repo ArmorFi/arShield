@@ -1,4 +1,3 @@
-import { expect } from "chai";
 import { ethers } from "hardhat";
 import { Contract, Signer, BigNumber, constants } from "ethers";
 import UniswapV2Factory from '@uniswap/v2-core/build/UniswapV2Factory.json';

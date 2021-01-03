@@ -2,6 +2,7 @@ import { expect } from "chai";
 import { ethers } from "hardhat";
 import { Contract, Signer, BigNumber, constants } from "ethers";
 import { Uniswap } from "./Uniswap";
+import { ArmorCore } from "./ArmorCore";
 describe("ArShield", function () {
   let accounts: Signer[];
   let uniswap: Uniswap;
@@ -14,6 +15,9 @@ describe("ArShield", function () {
 
   let reward: Contract;
   let arShield: Contract;
+
+  let core: ArmorCore;
+  let armorReward: Contract;
   beforeEach(async function () {
     accounts = await ethers.getSigners();
     owner = accounts[0];
@@ -27,9 +31,17 @@ describe("ArShield", function () {
     await uniswap.deploy(weth);
     lpToken = await uniswap.createPair(token0, token1);
     await uniswap.supply(token0, token1, 1000000000,1000000000);
+
+    armorReward = await Token.connect(owner).deploy();
+    core = new ArmorCore(owner);
+    await core.deploy(armorReward);
   });
 
-  it("", async function(){
-    console.log("hi");
+  describe("#stake()", function(){
+    it("should fail if coverage is not enough", async function(){
+    });
+    it("should be able to stake", async function(){
+      console.log("hi");
+    });
   });
 });
