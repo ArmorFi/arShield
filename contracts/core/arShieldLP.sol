@@ -4,6 +4,7 @@ pragma solidity ^0.6.6;
 
 import './PoolFuncs.sol';
 import './RewardManager.sol';
+import '../interfaces/IArmorMaster.sol';
 import '../interfaces/IPlanManager.sol';
 import '../interfaces/IClaimManager.sol';
 import '../interfaces/IBalanceManager.sol';
@@ -19,6 +20,7 @@ contract ArShieldLP is Ownable, RewardManager, PoolFuncs {
     address public protocol;
     
     // arCore manager contracts.
+    IArmorMaster public armorMaster;
     IBalanceManager public balanceManager;
     IClaimManager public claimManager;
     IPlanManager public planManager;
@@ -67,6 +69,7 @@ contract ArShieldLP is Ownable, RewardManager, PoolFuncs {
         initializeOwnable();
         rewardInitialize(_rewardToken, _lpToken, msg.sender, _feePerSec, _referPercent);
         ammInitialize(_uniRouter, _lpToken, _baseTokens, _path0, _path1);
+        armorMaster = IArmorMaster(_armorMaster);
         protocol = _protocol;
 
         // Stack too deep...
@@ -135,6 +138,7 @@ contract ArShieldLP is Ownable, RewardManager, PoolFuncs {
     **/
     function allowedCoverage(uint256 _fullCoverage)
       internal
+      view
     returns (uint256)
     {
         uint256 available = planManager.coverageLeft(protocol);
