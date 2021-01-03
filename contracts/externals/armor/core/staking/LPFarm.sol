@@ -3,12 +3,11 @@
 pragma solidity ^0.6.6;
 
 import '../general/Ownable.sol';
-import '../general/VaultTokenWrapper.sol';
+import '../general/TokenWrapper.sol';
 import '../libraries/Math.sol';
 import '../libraries/SafeMath.sol';
 import '../interfaces/IERC20.sol';
-import '../interfaces/IStakeManager.sol';
-import '../interfaces/IRewardDistributionRecipient.sol';
+import '../interfaces/IRewardDistributionRecipientTokenOnly.sol';
 
 /**
 * MIT License
@@ -34,10 +33,8 @@ import '../interfaces/IRewardDistributionRecipient.sol';
 * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 */
 
-contract RewardManager is VaultTokenWrapper, Ownable, IRewardDistributionRecipient {
-    
+contract LPFarm is TokenWrapper, Ownable, IRewardDistributionRecipientTokenOnly {
     IERC20 public rewardToken;
-    IStakeManager public stakeManager;
     address public rewardDistribution;
     uint256 public constant DURATION = 7 days;
 
@@ -53,56 +50,9 @@ contract RewardManager is VaultTokenWrapper, Ownable, IRewardDistributionRecipie
     event Withdrawn(address indexed user, uint256 amount);
     event RewardPaid(address indexed user, uint256 reward);
 
-    // Denominator used to when distributing tokens 1000 == 100%
-    uint256 public constant DENOMINATOR = 1000;
-
-    // Number of full Ether per full token. Only set if a claim is successful.
-    uint256 public weiPerToken;
-    
-    // Price--in Ether--of each token.
-    uint256 public tokenPrice;
-
-    // Last time that a user transferred funds--used to keep track of fees owed by users.
-    mapping (address => uint256) public lastUpdate;
-    
-    // Referrers of users get paid a % of what 
-    mapping (address => address) public referrers;
-
-    // Percent of fee that referrers receive. 50 == 5%.
-    uint256 public referPercent;
-
-    // Rate that will be paid (in %) per second for users using vault.
-    // 1% == 1e18. Will start at 133164236000 for about 4.2% per year.
-    uint256 public feePerSec;
-
-    modifier notLocked {
-        require(weiPerToken == 0, "A claim has been made successfully.");
-        _;
-    }
-
-    /**
-     * @dev This modifier added by Armor to pay for insurance.
-     * @param account The account that we're updating balance of.
-    **/
-    modifier updateBalance(address account)
-    {
-        if (lastUpdate[account] != 0) {
-            uint256 timeElapsed = block.timestamp.sub(lastUpdate[account]);
-            uint256 percent = feePerSec * timeElapsed;
-            
-            // 1e20 = 1e18 because percent is in that many decimals + 100 because it's a percent.
-            uint256 fee = balanceOf(account) * percent / 1e20;
-            uint256 referFee = fee * referPercent / DENOMINATOR;
-            _updateStake(account, referrers[account], fee.sub(referFee), referFee);
-        }
-        _;
-        lastUpdate[account] = block.timestamp;
-    }
-
     modifier updateReward(address account) {
         rewardPerTokenStored = rewardPerToken();
         lastUpdateTime = lastTimeRewardApplicable();
-        
         if (account != address(0)) {
             rewards[account] = earned(account);
             userRewardPerTokenPaid[account] = rewardPerTokenStored;
@@ -115,24 +65,12 @@ contract RewardManager is VaultTokenWrapper, Ownable, IRewardDistributionRecipie
         _;
     }
 
-    /**
-     * @dev Initialize Reward Manager.
-     * @param _rewardToken The token that stakers will be rewarded with (ARMOR).
-     * @param _stakeToken The token that will be being staked (LP for Uniswap or Balancer).
-     * @param _rewardDistribution The address that will be sending ARMOR to this contract.
-     * @param _feePerSec The % fee per second that will be charged to users. 1% = 1e18.
-    **/
-    function rewardInitialize(address _rewardToken, address _stakeToken, address _rewardDistribution, uint256 _feePerSec, uint256 _referPercent)
-      internal
+    constructor(address _stakeToken, address _rewardToken)
+      public
     {
         Ownable.initializeOwnable();
-        initializeVaultTokenWrapper(_stakeToken);
-        require(address(_rewardDistribution) == address(0), "Contract is already initialized.");
         stakeToken = IERC20(_stakeToken);
         rewardToken = IERC20(_rewardToken);
-        rewardDistribution = _rewardDistribution;
-        feePerSec = _feePerSec;
-        referPercent = _referPercent;
     }
 
     function setRewardDistribution(address _rewardDistribution)
@@ -170,28 +108,15 @@ contract RewardManager is VaultTokenWrapper, Ownable, IRewardDistributionRecipie
     }
 
     // stake visibility is public as overriding LPTokenWrapper's stake() function
-    // Referrer will only set once. If it is address(0) upon first stake, it is set to devWallet.
-    function stake(uint256 amount, address _referrer) public virtual notLocked updateBalance(msg.sender) updateReward(msg.sender) {
-        if ( referrers[msg.sender] == address(0) ) {
-            referrers[msg.sender] = _referrer != address(0) ? _referrer : owner();
-        }
-        
+    function stake(uint256 amount) public override updateReward(msg.sender) {
         require(amount > 0, "Cannot stake 0");
-        super._stake(amount);
+        super.stake(amount);
         emit Staked(msg.sender, amount);
     }
 
-    function withdraw(uint256 amount) public updateBalance(msg.sender) updateReward(msg.sender) {
+    function withdraw(uint256 amount) public override updateReward(msg.sender) {
         require(amount > 0, "Cannot withdraw 0");
-        super._withdraw(amount);
-        
-        // If a claim has been successful, also withdraw Ether.
-        if (weiPerToken > 0) {
-            // Amount is in token Wei while weiPerToken is per full token so 1e18 is needed.
-            uint256 claimAmount = amount * weiPerToken / 1e18;
-            msg.sender.transfer(claimAmount);
-        }
-        
+        super.withdraw(amount);
         emit Withdrawn(msg.sender, amount);
     }
 
@@ -200,7 +125,7 @@ contract RewardManager is VaultTokenWrapper, Ownable, IRewardDistributionRecipie
         getReward();
     }
 
-    function getReward() public updateBalance(msg.sender) updateReward(msg.sender) {
+    function getReward() public updateReward(msg.sender) {
         uint256 reward = earned(msg.sender);
         if (reward > 0) {
             rewards[msg.sender] = 0;
@@ -211,15 +136,11 @@ contract RewardManager is VaultTokenWrapper, Ownable, IRewardDistributionRecipie
 
     function notifyRewardAmount(uint256 reward)
         external
-        payable
         override
         onlyRewardDistribution
         updateReward(address(0))
     {
-        //this will make sure tokens are in the reward pool
-        if ( address(rewardToken) == address(0) ) require(msg.value == reward, "Correct reward was not sent.");
-        else rewardToken.safeTransferFrom(msg.sender, address(this), reward);
-        
+        rewardToken.safeTransferFrom(msg.sender, address(this), reward);
         if (block.timestamp >= periodFinish) {
             rewardRate = reward.div(DURATION);
         } else {
@@ -231,18 +152,4 @@ contract RewardManager is VaultTokenWrapper, Ownable, IRewardDistributionRecipie
         periodFinish = block.timestamp.add(DURATION);
         emit RewardAdded(reward);
     }
-    
-    
-    /**
-     * @dev Owner may change the percent of insurance fees referrers receive.
-     * @param _referPercent The percent of fees referrers receive. 50 == 5%.
-    **/
-    function changeReferPercent(uint256 _referPercent)
-      external
-      onlyOwner
-    {
-        require(_referPercent <= 1000, "Cannot give more than 100% of fees.");
-        referPercent = _referPercent;
-    }
-    
 }

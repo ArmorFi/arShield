@@ -3,7 +3,7 @@
 pragma solidity ^0.6.6;
 
 import './PoolFuncs.sol';
-import './RewardManager.sol';
+import './RewardManagerWithReferral.sol';
 import '../interfaces/IArmorMaster.sol';
 import '../interfaces/IPlanManager.sol';
 import '../interfaces/IClaimManager.sol';
@@ -14,7 +14,7 @@ import '../interfaces/IBalanceManager.sol';
  * @dev Vault to allow LPs to gain LP rewards and ARMOR tokens while being protected from hacks with coverage for the protocol.
  * @author Robert M.C. Forster
 **/
-contract ArShieldLP is Ownable, RewardManager, PoolFuncs {
+contract ArShieldLP is Ownable, RewardManagerWithRefferal, PoolFuncs {
 
     // The protocol that this contract buys coverage for (Nexus Mutual address for Uniswap/Balancer/etc.).
     address public protocol;
@@ -65,7 +65,6 @@ contract ArShieldLP is Ownable, RewardManager, PoolFuncs {
     )
       public
     {
-        //TODO: intialize armor master
         initializeOwnable();
         rewardInitialize(_rewardToken, _lpToken, msg.sender, _feePerSec, _referPercent);
         ammInitialize(_uniRouter, _lpToken, _baseTokens, _path0, _path1);
@@ -101,7 +100,7 @@ contract ArShieldLP is Ownable, RewardManager, PoolFuncs {
         feePool = 0;
         
         addBalance();
-        updateCoverage( allowedCoverage(fullCoverage) );
+        updateCoverage(allowedCoverage(fullCoverage));
     }
     
     /**
@@ -128,7 +127,7 @@ contract ArShieldLP is Ownable, RewardManager, PoolFuncs {
     }
 
     function stake(uint256 amount, address _referrer) public override checkCoverage(amount) {
-        RewardManager.stake(amount,_referrer);
+        RewardManagerWithRefferal.stake(amount,_referrer);
     }
     /**
      * @dev Checks how much coverage is allowed on the contract. Buys as much as possible.

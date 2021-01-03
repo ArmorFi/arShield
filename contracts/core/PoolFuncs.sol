@@ -37,13 +37,14 @@ abstract contract PoolFuncs {
         uniRouter = IUniRouter(_uniRouter);
         
         require(_baseTokens[0] != _baseTokens[1], "Should have 2 base tokens");
-        //this will prevent from reverting when base == ETH
-        if(address(baseToken0) != address(0)){
-            baseToken0.approve( address(uniRouter), uint256(-1) );
-        }
-        if(address(baseToken1) != address(0)){
-            baseToken1.approve( address(uniRouter), uint256(-1) );
-        }
+        // this will prevent from reverting when base == ETH
+        // actually, this should not happen since ETH is not being used as lp token base in uni/balancer
+        //if(address(baseToken0) != address(0)){
+        baseToken0.approve( address(uniRouter), uint256(-1) );
+        //}
+        //if(address(baseToken1) != address(0)){
+        baseToken1.approve( address(uniRouter), uint256(-1) );
+        //}
 
         // path verification would be nice
         path0 = _path0;
@@ -59,14 +60,9 @@ abstract contract PoolFuncs {
       internal
     {
         // Deadline of 1e18 is 
-        if ( address(baseToken0) != address(0) ) {
-            uint256 balance0 = baseToken0.balanceOf( address(this) );
-            uniRouter.swapExactTokensForEth( balance0, 0, path0, address(this), uint256(-1) );
-        }
-        
-        if ( address(baseToken1) != address(0) ) {
-            uint256 balance1 = baseToken1.balanceOf( address(this) );
-            uniRouter.swapExactTokensForEth( balance1, 0, path1, address(this), uint256(-1) );
-        }
+        uint256 balance0 = baseToken0.balanceOf( address(this) );
+        uniRouter.swapExactTokensForEth( balance0, 0, path0, address(this), uint256(-1) );
+        uint256 balance1 = baseToken1.balanceOf( address(this) );
+        uniRouter.swapExactTokensForEth( balance1, 0, path1, address(this), uint256(-1) );
     }
 }
