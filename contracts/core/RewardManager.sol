@@ -80,12 +80,6 @@ contract RewardManager is VaultTokenWrapper, Ownable, IRewardDistributionRecipie
         _;
     }
 
-    modifier checkCoverage(uint256 amount) {
-        uint256 available = allowedCoverage(tokenPrice * 1e18 / amount);
-        require(available >= amount, "Not enough coverage available for this stake.");
-        _;
-    }
-
     /**
      * @dev This modifier added by Armor to pay for insurance.
      * @param account The account that we're updating balance of.
@@ -132,6 +126,7 @@ contract RewardManager is VaultTokenWrapper, Ownable, IRewardDistributionRecipie
       internal
     {
         Ownable.initializeOwnable();
+        initializeVaultTokenWrapper(_stakeToken);
         require(address(_rewardDistribution) == address(0), "Contract is already initialized.");
         stakeToken = IERC20(_stakeToken);
         rewardToken = IERC20(_rewardToken);
@@ -176,19 +171,19 @@ contract RewardManager is VaultTokenWrapper, Ownable, IRewardDistributionRecipie
 
     // stake visibility is public as overriding LPTokenWrapper's stake() function
     // Referrer will only set once. If it is address(0) upon first stake, it is set to devWallet.
-    function stake(uint256 amount, address _referrer) public checkCoverage(amount) notLocked updateBalance(msg.sender) updateReward(msg.sender) {
+    function stake(uint256 amount, address _referrer) public virtual notLocked updateBalance(msg.sender) updateReward(msg.sender) {
         if ( referrers[msg.sender] == address(0) ) {
             referrers[msg.sender] = _referrer != address(0) ? _referrer : owner();
         }
         
         require(amount > 0, "Cannot stake 0");
-        super.stake(amount);
+        super._stake(amount);
         emit Staked(msg.sender, amount);
     }
 
-    function withdraw(uint256 amount) public override updateBalance(msg.sender) updateReward(msg.sender) {
+    function withdraw(uint256 amount) public updateBalance(msg.sender) updateReward(msg.sender) {
         require(amount > 0, "Cannot withdraw 0");
-        super.withdraw(amount);
+        super._withdraw(amount);
         
         // If a claim has been successful, also withdraw Ether.
         if (weiPerToken > 0) {
@@ -237,19 +232,6 @@ contract RewardManager is VaultTokenWrapper, Ownable, IRewardDistributionRecipie
         emit RewardAdded(reward);
     }
     
-    /**
-     * @dev Checks how much coverage is allowed on the contract. Buys as much as possible.
-     *      Needed on this contract so we don't accept more funds than available as coverage.
-     * @param _fullCoverage The full amount of coverage we want.
-     * @return Amount of cover able to be purchased.
-    **/
-    function allowedCoverage(uint256 _fullCoverage)
-      internal
-    returns (uint256)
-    {
-        uint256 available = stakeManager.allowedCoverage();
-        return available >= _fullCoverage ? _fullCoverage : available;
-    }
     
     /**
      * @dev Owner may change the percent of insurance fees referrers receive.

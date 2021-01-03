@@ -18,12 +18,6 @@ contract ArShieldLP is Ownable, RewardManager, PoolFuncs {
     // The protocol that this contract buys coverage for (Nexus Mutual address for Uniswap/Balancer/etc.).
     address public protocol;
     
-    // Needed to update plan.
-    address[] newProtocol;
-    address[] oldProtocol;
-    uint256[] newAmount;
-    uint256[] oldAmount;
-    
     // arCore manager contracts.
     IBalanceManager public balanceManager;
     IClaimManager public claimManager;
@@ -32,6 +26,12 @@ contract ArShieldLP is Ownable, RewardManager, PoolFuncs {
     // Avoid composability issues for liquidation.
     modifier notContract {
         require(msg.sender == tx.origin, "Sender must be an EOA.");
+        _;
+    }
+    
+    modifier checkCoverage(uint256 amount) {
+        uint256 available = allowedCoverage(tokenPrice * 1e18 / amount);
+        require(available >= amount, "Not enough coverage available for this stake.");
         _;
     }
     
@@ -52,7 +52,7 @@ contract ArShieldLP is Ownable, RewardManager, PoolFuncs {
         address[] memory _baseTokens, 
         address[] memory _path0,
         address[] memory _path1,
-        address[] memory _managers,
+        address _armorMaster,
         address _uniRouter,
         address _lpToken,
         address _rewardToken, 
@@ -63,19 +63,14 @@ contract ArShieldLP is Ownable, RewardManager, PoolFuncs {
     )
       public
     {
-        planManager = IPlanManager(_managers[0]);
-        claimManager = IClaimManager(_managers[1]);
-        balanceManager = IBalanceManager(_managers[2]);
-        stakeManager = IStakeManager(_managers[3]);
+        //TODO: intialize armor master
+        initializeOwnable();
         rewardInitialize(_rewardToken, _lpToken, msg.sender, _feePerSec, _referPercent);
         ammInitialize(_uniRouter, _lpToken, _baseTokens, _path0, _path1);
-        initializeVaultTokenWrapper(_lpToken);
         protocol = _protocol;
 
         // Stack too deep...
         tokenPrice = _lpStartingPrice;
-
-        newProtocol.push(_protocol);
     }
     
     /**
@@ -122,26 +117,42 @@ contract ArShieldLP is Ownable, RewardManager, PoolFuncs {
     function updateCoverage(uint256 _amount)
       internal
     {
-        newAmount[0] = _amount;
-        planManager.updatePlan(oldProtocol, oldAmount, newProtocol, newAmount);
-        if (oldAmount.length == 0) oldAmount.push(_amount);
-        else oldAmount[0] = _amount;
-        if (oldProtocol.length == 0) oldProtocol.push(protocol);
+        address[] memory protocols = new address[](1);
+        protocols[0] = protocol;
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = _amount;
+        planManager.updatePlan(protocols, amounts);
+    }
+
+    function stake(uint256 amount, address _referrer) public override checkCoverage(amount) {
+        RewardManager.stake(amount,_referrer);
+    }
+    /**
+     * @dev Checks how much coverage is allowed on the contract. Buys as much as possible.
+     *      Needed on this contract so we don't accept more funds than available as coverage.
+     * @param _fullCoverage The full amount of coverage we want.
+     * @return Amount of cover able to be purchased.
+    **/
+    function allowedCoverage(uint256 _fullCoverage)
+      internal
+    returns (uint256)
+    {
+        uint256 available = planManager.coverageLeft(protocol);
+        return available >= _fullCoverage ? _fullCoverage : available;
     }
     
     /**
      * @dev Claim coverage from arCore if a hack has occurred. Calls Claim Manager on arCore.
      * @param _hackTime Time that the hack occurred.
      * @param _amount Amount that this contract had covered at the time.
-     * @param _path Merkle path for Plan Manager.
     **/
-    function claimCoverage(uint256 _hackTime, uint256 _amount, bytes32[] calldata _path)
+    function claimCoverage(uint256 _hackTime, uint256 _amount)
       external
     {
         // There shouldn't ever be an Ether balance in here but just in case there is...
         uint256 startBalance = address(this).balance;
         
-        claimManager.redeemClaim(protocol, _hackTime, _amount, _path);
+        claimManager.redeemClaim(protocol, _hackTime, _amount);
         
         if (address(this).balance > startBalance) {
             weiPerToken = address(this).balance * 1e18 / totalSupply();

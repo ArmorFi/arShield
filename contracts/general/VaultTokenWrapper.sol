@@ -32,13 +32,18 @@ contract VaultTokenWrapper {
         return _balances[account];
     }
 
-    function stake(uint256 amount) public virtual {
+
+    // changed to internal to not be used in external situation
+    function _stake(uint256 amount) internal {
         _totalSupply = _totalSupply.add(amount);
         _balances[msg.sender] = _balances[msg.sender].add(amount);
         stakeToken.safeTransferFrom(msg.sender, address(this), amount);
     }
 
-    function withdraw(uint256 amount) public virtual {
+    // changed to internal to not be used in external situation
+    // this could have stayed public since withdraw is being overrided
+    // but changed to match the integrity
+    function _withdraw(uint256 amount) internal {
         _totalSupply = _totalSupply.sub(amount);
         _balances[msg.sender] = _balances[msg.sender].sub(amount);
         stakeToken.safeTransfer(msg.sender, amount);
