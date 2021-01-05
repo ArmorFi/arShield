@@ -13,7 +13,6 @@ import '../interfaces/IRewardManager.sol';
 import '../interfaces/IPlanManager.sol';
 import '../interfaces/IClaimManager.sol';
 import '../interfaces/IStakeManager.sol';
-
 /**
  * @dev Encompasses all functions taken by stakers.
 **/
@@ -207,7 +206,6 @@ contract StakeManager is ArmorModule, ExpireTracker, IStakeManager {
         // Update PlanManager to use the correct price for the protocol.
         // Find price per amount here to update plan manager correctly.
         uint256 pricePerEth = secondPrice / sumAssured;
-        
         IPlanManager(getModule("PLAN")).changePrice(scAddress, pricePerEth);
         
         IarNFT(getModule("ARNFT")).transferFrom(_user, getModule("CLAIM"), _nftId);

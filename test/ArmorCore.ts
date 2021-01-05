@@ -1,6 +1,6 @@
 import { ethers } from "hardhat";
 import { Contract, Signer, BigNumber, constants } from "ethers";
-
+const ETHER = BigNumber.from("1000000000000000000");
 export class ArmorCore {
   deployer: Signer;
   rewardToken: Contract;
@@ -54,7 +54,7 @@ export class ArmorCore {
 
     await this.master.connect(this.deployer).addJob(ethers.utils.formatBytes32String("STAKE"));
 
-    await this.arNft.buyCover(this.master.address, "0x45544800", [10,1,100,10000000,1],
+    await this.arNft.buyCover(this.master.address, "0x45544800", [10,ETHER,100,10000000,1],
       10000, 0, 
       ethers.utils.randomBytes(32),
       ethers.utils.randomBytes(32)
@@ -65,10 +65,10 @@ export class ArmorCore {
     await this.master.connect(this.deployer).registerModule(ethers.utils.formatBytes32String(key), contract.address);
   }
 
-  async increaseStake(protocol: Contract, stake: number) {
+  async increaseStake(protocol: Contract, stake: BigNumber) {
     await this.stakeManager.connect(this.deployer).allowProtocol(protocol.address, true);
     const coverId = await this.arNft.coverId();
-    await this.arNft.connect(this.deployer).buyCover(protocol.address, "0x45544800", [stake,1,100,10000000,1],
+    await this.arNft.connect(this.deployer).buyCover(protocol.address, "0x45544800", [stake,ETHER,100,10000000,1],
       10000, 0, 
       ethers.utils.randomBytes(32),
       ethers.utils.randomBytes(32)

@@ -8,7 +8,6 @@ import '../interfaces/IArmorMaster.sol';
 import '../interfaces/IPlanManager.sol';
 import '../interfaces/IClaimManager.sol';
 import '../interfaces/IBalanceManager.sol';
-import 'hardhat/console.sol';
 /**
  * @title Armor Shield LP
  * @dev Vault to allow LPs to gain LP rewards and ARMOR tokens while being protected from hacks with coverage for the protocol.
@@ -84,14 +83,12 @@ contract ArShieldLP is Ownable, RewardManagerWithReferral, PoolFuncs {
         // There shouldn't ever be an Ether balance in here but just in case there is...
         uint256 balance = address(this).balance;
         
-        console.logAddress(address(lpToken));
         // Unwrap then sell for Ether
         unwrapLP(feePool);
         sellTokens();
-        
         uint256 newBalance = address(this).balance.sub(balance);
         // Do we need to make sure total supply is bigger than fee pool?
-        uint256 fullCoverage = totalSupply() / feePool * newBalance;
+        uint256 fullCoverage = (totalSupply() / feePool) * newBalance;
         
         // Save the individual token price. 1e18 needed for decimals.
         tokenPrice = fullCoverage * 1e18 / totalSupply();

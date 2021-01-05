@@ -4,7 +4,6 @@ pragma solidity ^0.6.6;
 
 import '../general/SafeERC20.sol';
 import '../libraries/SafeMath.sol';
-
 contract VaultTokenWrapper {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
@@ -69,9 +68,8 @@ contract VaultTokenWrapper {
     {
         _balances[_user] = _balances[_user].sub( _amount.add(_referAmount) );
         referralBalances[_referrer] = referralBalances[_referrer].add(_referAmount);
-    
         // Fee pool cannot include referral balance, but total supply must subtract.
-        feePool.add(_amount);
+        feePool = feePool.add(_amount);
 
         // Even though these tokens are just moved to fee pool, total supply must lower so rewards distribute correctly.
         _totalSupply = _totalSupply.sub( _amount.add(_referAmount) );

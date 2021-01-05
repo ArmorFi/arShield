@@ -3,6 +3,8 @@ import { ethers } from "hardhat";
 import { Contract, Signer, BigNumber, constants } from "ethers";
 import { Uniswap } from "./Uniswap";
 import { ArmorCore } from "./ArmorCore";
+import { increase } from "./utils";
+const ETHER = BigNumber.from("1000000000000000000");
 describe("ArShield", function () {
   let accounts: Signer[];
   let uniswap: Uniswap;
@@ -33,28 +35,50 @@ describe("ArShield", function () {
     lpToken = await uniswap.createPair(token0, token1);
     await uniswap.createPair(weth, token1);
     await uniswap.createPair(token0, weth);
-    console.log(lpToken.address);
-    await uniswap.supply(token0, token1, 1000000000,1000000000);
-    await uniswap.supply(token0, weth, 1000000000,1000000000);
-    await uniswap.supply(weth, token1, 1000000000,1000000000);
-
+    
+    await weth.deposit({value:ETHER.mul(100)});
+    await uniswap.supply(token0, token1, ETHER.mul(100),ETHER.mul(100));
+    await uniswap.supply(token0, weth, ETHER.mul(2),ETHER.mul(2));
+    await uniswap.supply(weth, token1, ETHER.mul(2),ETHER.mul(2));
     armorReward = await Token.connect(owner).deploy();
     core = new ArmorCore(owner);
     await core.deploy(armorReward);
 
     const Shield = await ethers.getContractFactory("ArShieldLP");
     arShield = await Shield.deploy([token0.address, token1.address],[token0.address, weth.address], [token1.address, weth.address],
-      core.master.address,uniswap.router.address,lpToken.address,reward.address,1,1,uniswap.router.address,1
+      core.master.address,uniswap.router.address,lpToken.address,reward.address,BigNumber.from("1000"),1,uniswap.router.address,ETHER
     );
   });
 
   describe("#stake()", function(){
     it("should fail if coverage is not enough", async function(){
+      await core.increaseStake(uniswap.router, BigNumber.from(1));
+      await lpToken.approve(arShield.address, constants.MaxUint256);;
+      await expect(arShield.connect(owner).stake(ETHER.mul(2),constants.AddressZero)).to.be.revertedWith("Not enough coverage available for this stake.");
     });
     it("should be able to stake", async function(){
-      await core.increaseStake(uniswap.router, 1000);
-      await lpToken.approve(arShield.address, 1000);
-      await arShield.connect(owner).stake(1000,constants.AddressZero);
+      await core.increaseStake(uniswap.router, BigNumber.from(10000));
+      await lpToken.approve(arShield.address, constants.MaxUint256);;
+      await arShield.connect(owner).stake(ETHER,constants.AddressZero);
+    });
+  });
+
+  describe('#liquidate()', function(){
+    beforeEach(async function(){
+      await core.increaseStake(uniswap.router, BigNumber.from(10000));
+      await lpToken.approve(arShield.address, constants.MaxUint256);;
+      await arShield.connect(owner).stake(ETHER,constants.AddressZero);
+      await increase(1000000);
+      await arShield.connect(owner).stake(ETHER,constants.AddressZero);
+    });
+
+    it("should fail if msg.sender is not eoa", async function(){
+      const MockCaller = await ethers.getContractFactory("MockCaller");
+      const caller = await MockCaller.deploy();
+      await expect(caller.execute(arShield.address, "liquidate()", "0x")).to.be.reverted;
+    });
+
+    it("should be able to liquidate", async function(){
       await arShield.connect(owner).liquidate();
     });
   });

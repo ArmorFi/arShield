@@ -33,7 +33,7 @@ export class Uniswap {
     return await Pair.attach(addr);
   }
 
-  async supply(token0: Contract, token1: Contract, amount0: number, amount1: number) {
+  async supply(token0: Contract, token1: Contract, amount0: BigNumber, amount1: BigNumber) {
     await token0.connect(this.deployer).approve(this.router.address, constants.MaxUint256);
     await token1.connect(this.deployer).approve(this.router.address, constants.MaxUint256);
     await this.router.addLiquidity(token0.address, token1.address, amount0,amount1, 1,1, this.deployer.getAddress(), constants.MaxUint256);
