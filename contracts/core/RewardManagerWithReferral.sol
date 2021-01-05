@@ -90,14 +90,13 @@ contract RewardManagerWithReferral is VaultTokenWrapper, Ownable, IRewardDistrib
             if(percent > 1e20) {
                 percent = 1e20;
             }
-            
             // 1e20 = 1e18 because percent is in that many decimals + 100 because it's a percent.
-            uint256 fee = balanceOf(account) * percent / 1e20;
-            uint256 referFee = fee * referPercent / DENOMINATOR;
+            uint256 fee = (balanceOf(account) * percent) / 1e20;
+            uint256 referFee = (fee * referPercent) / DENOMINATOR;
             _updateStake(account, referrers[account], fee.sub(referFee), referFee);
         }
-        _;
         lastUpdate[account] = block.timestamp;
+        _;
     }
 
     modifier updateReward(address account) {
@@ -195,7 +194,7 @@ contract RewardManagerWithReferral is VaultTokenWrapper, Ownable, IRewardDistrib
         emit Withdrawn(msg.sender, amount);
     }
 
-    function exit() external {
+    function exit() external updateBalance(msg.sender) updateReward(msg.sender){
         withdraw(balanceOf(msg.sender));
         getReward();
     }

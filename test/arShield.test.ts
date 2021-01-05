@@ -82,4 +82,34 @@ describe("ArShield", function () {
       await arShield.connect(owner).liquidate();
     });
   });
+
+  describe('#withdraw()', function(){
+    beforeEach(async function(){
+      await core.increaseStake(uniswap.router, BigNumber.from(10000));
+      await lpToken.approve(arShield.address, constants.MaxUint256);;
+      await arShield.connect(owner).stake(ETHER,constants.AddressZero);
+      await increase(1000000);
+      await arShield.connect(owner).stake(ETHER,constants.AddressZero);
+      await arShield.connect(owner).liquidate();
+    });
+
+    it("should success", async function(){
+      await arShield.connect(owner).withdraw(ETHER);
+    });
+  });
+
+  describe('#exit()', function(){
+    beforeEach(async function(){
+      await core.increaseStake(uniswap.router, BigNumber.from(10000));
+      await lpToken.approve(arShield.address, constants.MaxUint256);;
+      await arShield.connect(owner).stake(ETHER,constants.AddressZero);
+      await increase(1000000);
+      await arShield.connect(owner).stake(ETHER,constants.AddressZero);
+      await arShield.connect(owner).liquidate();
+    });
+    
+    it("should success", async function(){
+      await arShield.connect(owner).exit();
+    });
+  });
 });

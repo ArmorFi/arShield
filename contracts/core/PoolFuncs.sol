@@ -62,8 +62,12 @@ abstract contract PoolFuncs {
     {
         // Deadline of 1e18 is 
         uint256 balance0 = baseToken0.balanceOf( address(this) );
-        uniRouter.swapExactTokensForETH( balance0, 0, path0, address(this), uint256(-1) );
+        if(balance0 > 0){
+            uniRouter.swapExactTokensForETH( balance0, 0, path0, address(this), uint256(-1) );
+        }
         uint256 balance1 = baseToken1.balanceOf( address(this) );
-        uniRouter.swapExactTokensForETH( balance1, 0, path1, address(this), uint256(-1) );
+        if(balance1 > 0){
+            uniRouter.swapExactTokensForETH( balance1, 0, path1, address(this), uint256(-1) );
+        }
     }
 }

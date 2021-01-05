@@ -87,8 +87,9 @@ contract ArShieldLP is Ownable, RewardManagerWithReferral, PoolFuncs {
         unwrapLP(feePool);
         sellTokens();
         uint256 newBalance = address(this).balance.sub(balance);
+        require(newBalance > 0, "no ether to liquidate");
         // Do we need to make sure total supply is bigger than fee pool?
-        uint256 fullCoverage = (totalSupply() / feePool) * newBalance;
+        uint256 fullCoverage = totalSupply() / feePool * newBalance;
         
         // Save the individual token price. 1e18 needed for decimals.
         tokenPrice = fullCoverage * 1e18 / totalSupply();
@@ -180,7 +181,8 @@ contract ArShieldLP is Ownable, RewardManagerWithReferral, PoolFuncs {
       internal
       override
     {
-        uint256 balance = lpToken.balanceOf(address(this));
-        uniRouter.removeLiquidity(address(baseToken0), address(baseToken1), balance, 1, 1, address(this), uint256(-1));
+        if(_amount > 0){
+            uniRouter.removeLiquidity(address(baseToken0), address(baseToken1), _amount, 1, 1, address(this), uint256(-1));
+        }
     }
 }
