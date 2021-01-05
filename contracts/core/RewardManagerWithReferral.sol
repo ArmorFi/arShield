@@ -34,7 +34,7 @@ import '../interfaces/IRewardDistributionRecipient.sol';
 * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 */
 
-contract RewardManagerWithRefferal is VaultTokenWrapper, Ownable, IRewardDistributionRecipient {
+contract RewardManagerWithReferral is VaultTokenWrapper, Ownable, IRewardDistributionRecipient {
     
     IERC20 public rewardToken;
     IStakeManager public stakeManager;
