@@ -59,9 +59,6 @@ contract RewardManagerWithRefferal is VaultTokenWrapper, Ownable, IRewardDistrib
     // Number of full Ether per full token. Only set if a claim is successful.
     uint256 public weiPerToken;
     
-    // Price--in Ether--of each token.
-    uint256 public tokenPrice;
-
     // Last time that a user transferred funds--used to keep track of fees owed by users.
     mapping (address => uint256) public lastUpdate;
     
@@ -131,7 +128,6 @@ contract RewardManagerWithRefferal is VaultTokenWrapper, Ownable, IRewardDistrib
     {
         Ownable.initializeOwnable();
         initializeVaultTokenWrapper(_stakeToken);
-        require(address(_rewardDistribution) == address(0), "Contract is already initialized.");
         stakeToken = IERC20(_stakeToken);
         rewardToken = IERC20(_rewardToken);
         rewardDistribution = _rewardDistribution;

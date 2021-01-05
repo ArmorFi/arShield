@@ -545,7 +545,7 @@ contract arNFTMock is
     bool public swapActivated;
 
     // ock data
-    uint256 coverId__;
+    uint256 public coverId;
     uint256 claimId__;
 
     mapping(uint256 => uint8) status_;
@@ -791,7 +791,7 @@ contract arNFTMock is
     
     /**
      * @dev Internal function for buying cover--params are same as eponymous external function.
-     * @return coverId ID of the new cover that has been bought.
+     * @return coverId_ ID of the new cover that has been bought.
     **/
     function _buyCover(
         address _coveredContractAddress,
@@ -801,22 +801,22 @@ contract arNFTMock is
         uint8 _v,
         bytes32 _r,
         bytes32 _s
-    ) internal returns (uint256 coverId) {
+    ) internal returns (uint256 coverId_) {
     
         uint256 coverPrice = _coverDetails[1];
 
-        status_[coverId__] = 0;
-        sumAssured_[coverId__] = _coverDetails[0];
-        coverPeriod_[coverId__] = _coverPeriod;
-        validUntil_[coverId__] = now + _coverPeriod * 1 days;
-        scAddress_[coverId__] = _coveredContractAddress;
-        currencyCode_[coverId__] = _coverCurrency;
-        premiumNXM_[coverId__] = _coverDetails[2];
+        status_[coverId] = 0;
+        sumAssured_[coverId] = _coverDetails[0];
+        coverPeriod_[coverId] = _coverPeriod;
+        validUntil_[coverId] = now + _coverPeriod * 1 days;
+        scAddress_[coverId] = _coveredContractAddress;
+        currencyCode_[coverId] = _coverCurrency;
+        premiumNXM_[coverId] = _coverDetails[2];
    
-        coverId = coverId__ ++;
+        coverId_ = coverId ++;
         
         // Keep track of how much was paid for this cover.
-        coverPrices[coverId] = coverPrice;
+        coverPrices[coverId_] = coverPrice;
     }
     
     /**

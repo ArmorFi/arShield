@@ -8,7 +8,7 @@ import '../interfaces/IArmorMaster.sol';
 import '../interfaces/IPlanManager.sol';
 import '../interfaces/IClaimManager.sol';
 import '../interfaces/IBalanceManager.sol';
-
+import 'hardhat/console.sol';
 /**
  * @title Armor Shield LP
  * @dev Vault to allow LPs to gain LP rewards and ARMOR tokens while being protected from hacks with coverage for the protocol.
@@ -21,9 +21,9 @@ contract ArShieldLP is Ownable, RewardManagerWithRefferal, PoolFuncs {
     
     // arCore manager contracts.
     IArmorMaster public armorMaster;
-    IBalanceManager public balanceManager;
-    IClaimManager public claimManager;
-    IPlanManager public planManager;
+    
+    // Price--in Ether--of each token.
+    uint256 public tokenPrice;
     
     // Avoid composability issues for liquidation.
     modifier notContract {
@@ -65,7 +65,6 @@ contract ArShieldLP is Ownable, RewardManagerWithRefferal, PoolFuncs {
     )
       public
     {
-        initializeOwnable();
         rewardInitialize(_rewardToken, _lpToken, msg.sender, _feePerSec, _referPercent);
         ammInitialize(_uniRouter, _lpToken, _baseTokens, _path0, _path1);
         armorMaster = IArmorMaster(_armorMaster);
@@ -85,6 +84,7 @@ contract ArShieldLP is Ownable, RewardManagerWithRefferal, PoolFuncs {
         // There shouldn't ever be an Ether balance in here but just in case there is...
         uint256 balance = address(this).balance;
         
+        console.logAddress(address(lpToken));
         // Unwrap then sell for Ether
         unwrapLP(feePool);
         sellTokens();
@@ -109,7 +109,7 @@ contract ArShieldLP is Ownable, RewardManagerWithRefferal, PoolFuncs {
     function addBalance()
       internal
     {
-        balanceManager.deposit{value: address(this).balance}( address(0) );
+        IBalanceManager(armorMaster.getModule("BALANCE")).deposit{value: address(this).balance}( address(0) );
     }
     
     /**
@@ -123,7 +123,7 @@ contract ArShieldLP is Ownable, RewardManagerWithRefferal, PoolFuncs {
         protocols[0] = protocol;
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = _amount;
-        planManager.updatePlan(protocols, amounts);
+        IPlanManager(armorMaster.getModule("PLAN")).updatePlan(protocols, amounts);
     }
 
     function stake(uint256 amount, address _referrer) public override checkCoverage(amount) {
@@ -140,7 +140,7 @@ contract ArShieldLP is Ownable, RewardManagerWithRefferal, PoolFuncs {
       view
     returns (uint256)
     {
-        uint256 available = planManager.coverageLeft(protocol);
+        uint256 available = IPlanManager(armorMaster.getModule("PLAN")).coverageLeft(protocol);
         return available >= _fullCoverage ? _fullCoverage : available;
     }
     
@@ -155,7 +155,7 @@ contract ArShieldLP is Ownable, RewardManagerWithRefferal, PoolFuncs {
         // There shouldn't ever be an Ether balance in here but just in case there is...
         uint256 startBalance = address(this).balance;
         
-        claimManager.redeemClaim(protocol, _hackTime, _amount);
+        IClaimManager(armorMaster.getModule("CLAIM")).redeemClaim(protocol, _hackTime, _amount);
         
         if (address(this).balance > startBalance) {
             weiPerToken = address(this).balance * 1e18 / totalSupply();
@@ -171,7 +171,7 @@ contract ArShieldLP is Ownable, RewardManagerWithRefferal, PoolFuncs {
       external
       onlyOwner
     {
-        balanceManager.withdraw(_amount);
+        IBalanceManager(armorMaster.getModule("BALANCE")).withdraw(_amount);
         owner().transfer(address(this).balance);
     }
 
@@ -183,6 +183,7 @@ contract ArShieldLP is Ownable, RewardManagerWithRefferal, PoolFuncs {
       internal
       override
     {
-        IUniPool(address(lpToken)).burn(_amount);
+        uint256 balance = lpToken.balanceOf(address(this));
+        uniRouter.removeLiquidity(address(baseToken0), address(baseToken1), balance, 1, 1, address(this), uint256(-1));
     }
 }
