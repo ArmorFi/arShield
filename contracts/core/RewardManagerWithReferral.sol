@@ -9,7 +9,6 @@ import '../libraries/SafeMath.sol';
 import '../interfaces/IERC20.sol';
 import '../interfaces/IStakeManager.sol';
 import '../interfaces/IRewardDistributionRecipient.sol';
-
 /**
 * MIT License
 * ===========
@@ -34,7 +33,7 @@ import '../interfaces/IRewardDistributionRecipient.sol';
 * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 */
 
-contract RewardManagerWithReferral is VaultTokenWrapper, Ownable, IRewardDistributionRecipient {
+abstract contract RewardManagerWithReferral is VaultTokenWrapper, Ownable, IRewardDistributionRecipient {
     
     IERC20 public rewardToken;
     IStakeManager public stakeManager;
@@ -56,8 +55,6 @@ contract RewardManagerWithReferral is VaultTokenWrapper, Ownable, IRewardDistrib
     // Denominator used to when distributing tokens 1000 == 100%
     uint256 public constant DENOMINATOR = 1000;
 
-    // Number of full Ether per full token. Only set if a claim is successful.
-    uint256 public weiPerToken;
     
     // Last time that a user transferred funds--used to keep track of fees owed by users.
     mapping (address => uint256) public lastUpdate;
@@ -71,11 +68,6 @@ contract RewardManagerWithReferral is VaultTokenWrapper, Ownable, IRewardDistrib
     // Rate that will be paid (in %) per second for users using vault.
     // 1% == 1e18. Will start at 133164236000 for about 4.2% per year.
     uint256 public feePerSec;
-
-    modifier notLocked {
-        require(weiPerToken == 0, "A claim has been made successfully.");
-        _;
-    }
 
     /**
      * @dev This modifier added by Armor to pay for insurance.
@@ -93,7 +85,7 @@ contract RewardManagerWithReferral is VaultTokenWrapper, Ownable, IRewardDistrib
             // 1e20 = 1e18 because percent is in that many decimals + 100 because it's a percent.
             uint256 fee = (balanceOf(account) * percent) / 1e20;
             uint256 referFee = (fee * referPercent) / DENOMINATOR;
-            _updateStake(account, referrers[account], fee.sub(referFee), referFee);
+            _distributeFee(account, referrers[account], fee.sub(referFee), referFee);
         }
         lastUpdate[account] = block.timestamp;
         _;
@@ -170,32 +162,29 @@ contract RewardManagerWithReferral is VaultTokenWrapper, Ownable, IRewardDistrib
 
     // stake visibility is public as overriding LPTokenWrapper's stake() function
     // Referrer will only set once. If it is address(0) upon first stake, it is set to devWallet.
-    function stake(uint256 amount, address _referrer) public virtual notLocked updateBalance(msg.sender) updateReward(msg.sender) {
+    function stake(uint256 amount, address _referrer) public virtual updateBalance(msg.sender) updateReward(msg.sender) {
+        require(amount > 0, "Cannot stake 0");
         if ( referrers[msg.sender] == address(0) ) {
             referrers[msg.sender] = _referrer != address(0) ? _referrer : owner();
         }
-        
-        require(amount > 0, "Cannot stake 0");
-        super._stake(amount);
+        super._stake(msg.sender,amount);
         emit Staked(msg.sender, amount);
     }
 
-    function withdraw(uint256 amount) public updateBalance(msg.sender) updateReward(msg.sender) {
-        require(amount > 0, "Cannot withdraw 0");
-        super._withdraw(amount);
+    function _withdraw(address payable user, uint256 amount) internal {
+        super._withdraw(user, amount);
         
-        // If a claim has been successful, also withdraw Ether.
-        if (weiPerToken > 0) {
-            // Amount is in token Wei while weiPerToken is per full token so 1e18 is needed.
-            uint256 claimAmount = amount * weiPerToken / 1e18;
-            msg.sender.transfer(claimAmount);
-        }
-        
-        emit Withdrawn(msg.sender, amount);
+        emit Withdrawn(user, amount);
     }
 
-    function exit() external updateBalance(msg.sender) updateReward(msg.sender){
-        withdraw(balanceOf(msg.sender));
+    function withdraw(uint256 amount) external virtual updateBalance(msg.sender) updateReward(msg.sender){
+        require(amount > 0, "Cannot withdraw 0");
+        RewardManagerWithReferral._withdraw(msg.sender, amount);
+    }
+
+    function exit() external virtual updateBalance(msg.sender) updateReward(msg.sender){
+        uint256 amount = balanceOf(msg.sender);
+        RewardManagerWithReferral._withdraw(msg.sender, amount);
         getReward();
     }
 

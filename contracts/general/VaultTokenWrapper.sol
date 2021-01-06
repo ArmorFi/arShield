@@ -33,19 +33,19 @@ contract VaultTokenWrapper {
 
 
     // changed to internal to not be used in external situation
-    function _stake(uint256 amount) internal {
+    function _stake(address user, uint256 amount) internal {
         _totalSupply = _totalSupply.add(amount);
-        _balances[msg.sender] = _balances[msg.sender].add(amount);
-        stakeToken.safeTransferFrom(msg.sender, address(this), amount);
+        _balances[user] = _balances[user].add(amount);
+        stakeToken.safeTransferFrom(user, address(this), amount);
     }
 
     // changed to internal to not be used in external situation
     // this could have stayed public since withdraw is being overrided
     // but changed to match the integrity
-    function _withdraw(uint256 amount) internal {
+    function _withdraw(address user, uint256 amount) internal {
         _totalSupply = _totalSupply.sub(amount);
-        _balances[msg.sender] = _balances[msg.sender].sub(amount);
-        stakeToken.safeTransfer(msg.sender, amount);
+        _balances[user] = _balances[user].sub(amount);
+        stakeToken.safeTransfer(user, amount);
     }
     
     /**
@@ -63,15 +63,15 @@ contract VaultTokenWrapper {
     /**
      * @dev Only used by contract to update a user's balance by subtracting then adding to fee pool.
     **/
-    function _updateStake(address _user, address _referrer, uint256 _amount, uint256 _referAmount)
+    function _distributeFee(address _user, address _referrer, uint256 _feeAmount, uint256 _referAmount)
       internal
     {
-        _balances[_user] = _balances[_user].sub( _amount.add(_referAmount) );
+        _balances[_user] = _balances[_user].sub( _feeAmount.add(_referAmount) );
         referralBalances[_referrer] = referralBalances[_referrer].add(_referAmount);
         // Fee pool cannot include referral balance, but total supply must subtract.
-        feePool = feePool.add(_amount);
+        feePool = feePool.add(_feeAmount);
 
         // Even though these tokens are just moved to fee pool, total supply must lower so rewards distribute correctly.
-        _totalSupply = _totalSupply.sub( _amount.add(_referAmount) );
+        _totalSupply = _totalSupply.sub( _feeAmount.add(_referAmount) );
     }
 }

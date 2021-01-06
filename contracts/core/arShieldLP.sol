@@ -24,6 +24,14 @@ contract ArShieldLP is Ownable, RewardManagerWithReferral, PoolFuncs {
     // Price--in Ether--of each token.
     uint256 public tokenPrice;
     
+    // Number of full Ether per full token. Only set if a claim is successful.
+    uint256 public weiPerToken;
+    
+    modifier notLocked {
+        require(weiPerToken == 0, "A claim has been made successfully.");
+        _;
+    }
+
     // Avoid composability issues for liquidation.
     modifier notContract {
         require(msg.sender == tx.origin, "Sender must be an EOA.");
@@ -82,15 +90,13 @@ contract ArShieldLP is Ownable, RewardManagerWithReferral, PoolFuncs {
     {
         // There shouldn't ever be an Ether balance in here but just in case there is...
         uint256 balance = address(this).balance;
-        
         // Unwrap then sell for Ether
         unwrapLP(feePool);
         sellTokens();
         uint256 newBalance = address(this).balance.sub(balance);
         require(newBalance > 0, "no ether to liquidate");
         // Do we need to make sure total supply is bigger than fee pool?
-        uint256 fullCoverage = totalSupply() / feePool * newBalance;
-        
+        uint256 fullCoverage = totalSupply() ;// / feePool * newBalance;
         // Save the individual token price. 1e18 needed for decimals.
         tokenPrice = fullCoverage * 1e18 / totalSupply();
         
@@ -123,9 +129,40 @@ contract ArShieldLP is Ownable, RewardManagerWithReferral, PoolFuncs {
         amounts[0] = _amount;
         IPlanManager(armorMaster.getModule("PLAN")).updatePlan(protocols, amounts);
     }
+    
+    function endCoverage()
+      internal
+    {
+        address[] memory protocols = new address[](0);
+        uint256[] memory amounts = new uint256[](0);
+        IPlanManager(armorMaster.getModule("PLAN")).updatePlan(protocols, amounts);
+    }
 
-    function stake(uint256 amount, address _referrer) public override checkCoverage(amount) {
+    function stake(uint256 amount, address _referrer) public override notLocked checkCoverage(amount) {
         RewardManagerWithReferral.stake(amount,_referrer);
+    }
+
+    function withdraw(uint256 amount) external override updateBalance(msg.sender) updateReward(msg.sender){
+        require(amount > 0, "Cannot withdraw 0");
+        RewardManagerWithReferral._withdraw(msg.sender, amount);
+        // If a claim has been successful, also withdraw Ether.
+        if (weiPerToken > 0) {
+            // Amount is in token Wei while weiPerToken is per full token so 1e18 is needed.
+            uint256 claimAmount = amount * weiPerToken / 1e18;
+            msg.sender.transfer(claimAmount);
+        }
+    }
+
+    function exit() external override updateBalance(msg.sender) updateReward(msg.sender){
+        uint256 amount = balanceOf(msg.sender);
+        RewardManagerWithReferral._withdraw(msg.sender, amount);
+        getReward();
+        // If a claim has been successful, also withdraw Ether.
+        if (weiPerToken > 0) {
+            // Amount is in token Wei while weiPerToken is per full token so 1e18 is needed.
+            uint256 claimAmount = amount * weiPerToken / 1e18;
+            msg.sender.transfer(claimAmount);
+        }
     }
     /**
      * @dev Checks how much coverage is allowed on the contract. Buys as much as possible.
@@ -150,6 +187,7 @@ contract ArShieldLP is Ownable, RewardManagerWithReferral, PoolFuncs {
     function claimCoverage(uint256 _hackTime, uint256 _amount)
       external
     {
+        endCoverage();
         // There shouldn't ever be an Ether balance in here but just in case there is...
         uint256 startBalance = address(this).balance;
         

@@ -5,14 +5,17 @@ pragma solidity ^0.6.6;
 import '../libraries/SafeMath.sol';
 
 /**
- * @title Expire Traker
- * @dev Keeps track of expired NFTs.
+ * @title Balance Expire Traker
+ * @dev Keeps track of expiration of user balances.
 **/
-contract ExpireTracker {
+contract BalanceExpireTracker {
     
     using SafeMath for uint64;
     using SafeMath for uint256;
-
+    
+    // Don't want to keep typing address(0). Typecasting just for clarity.
+    uint160 private constant EMPTY = uint160(address(0));
+    
     // 1 day for each step.
     uint64 public constant BUCKET_STEP = 86400;
 
@@ -21,26 +24,26 @@ contract ExpireTracker {
     mapping(uint64 => Bucket) public checkPoints;
 
     struct Bucket {
-        uint96 head;
-        uint96 tail;
+        uint160 head;
+        uint160 tail;
     }
 
     // points first active nft
-    uint96 public head;
+    uint160 public head;
     // points last active nft
-    uint96 public tail;
+    uint160 public tail;
 
     // maps expireId to deposit info
-    mapping(uint96 => ExpireMetadata) public infos; 
+    mapping(uint160 => ExpireMetadata) public infos; 
     
     // pack data to reduce gas
     struct ExpireMetadata {
-        uint96 next; // zero if there is no further information
-        uint96 prev;
+        uint160 next; // zero if there is no further information
+        uint160 prev;
         uint64 expiresAt;
     }
 
-    function expired() internal view returns(bool) {
+    function expired() internal view returns(bool){
         if(infos[head].expiresAt == 0) {
             return false;
         }
@@ -53,17 +56,21 @@ contract ExpireTracker {
     }
 
     // using typecasted expireId to save gas
-    function push(uint96 expireId, uint64 expiresAt) 
+    function push(uint160 expireId, uint64 expiresAt) 
       internal 
     {
-        require(expireId != 0, "info id 0 cannot be supported");
+        require(expireId != EMPTY, "info id address(0) cannot be supported");
+        
+        // If this is a replacement for a current balance, remove it's current link first.
+        if (infos[expireId].expiresAt > 0) _remove(expireId);
+        
         uint64 bucket = uint64( (expiresAt.div(BUCKET_STEP)).mul(BUCKET_STEP) );
-        if (head == 0) {
+        if (head == EMPTY) {
             // all the nfts are expired. so just add
             head = expireId;
             tail = expireId; 
             checkPoints[bucket] = Bucket(expireId, expireId);
-            infos[expireId] = ExpireMetadata(0,0,expiresAt);
+            infos[expireId] = ExpireMetadata(EMPTY,EMPTY,expiresAt);
             
             return;
         }
@@ -73,14 +80,16 @@ contract ExpireTracker {
         if (infos[head].expiresAt >= expiresAt) {
             // pushing nft is going to expire first
             // update head
-            infos[expireId] = ExpireMetadata(0,head,expiresAt);
+            infos[head].prev = expireId;
+
+            infos[expireId] = ExpireMetadata(head, EMPTY, expiresAt);
             head = expireId;
             
             // update head of bucket
             Bucket storage b = checkPoints[bucket];
             b.head = expireId;
                 
-            if(b.tail == 0) {
+            if(b.tail == EMPTY) {
                 // if tail is zero, this bucket was empty should fill tail with expireId
                 b.tail = expireId;
             }
@@ -91,15 +100,17 @@ contract ExpireTracker {
           
         // then check if depositing nft will last more than latest
         if (infos[tail].expiresAt <= expiresAt) {
+            infos[tail].next = expireId;
+
             // push nft at tail
-            infos[expireId] = ExpireMetadata(tail,0,expiresAt);
+            infos[expireId] = ExpireMetadata(EMPTY,tail,expiresAt);
             tail = expireId;
             
             // update tail of bucket
             Bucket storage b = checkPoints[bucket];
             b.tail = expireId;
             
-            if(b.head == 0){
+            if(b.head == EMPTY) {
               // if head is zero, this bucket was empty should fill head with expireId
               b.head = expireId;
             }
@@ -109,10 +120,10 @@ contract ExpireTracker {
         }
           
         // so our nft is somewhere in between
-        if (checkPoints[bucket].head != 0) {
+        if (checkPoints[bucket].head != EMPTY) {
             //bucket is not empty
             //we just need to find our neighbor in the bucket
-            uint96 cursor = checkPoints[bucket].head;
+            uint160 cursor = checkPoints[bucket].head;
         
             // iterate until we find our nft's next
             while(infos[cursor].expiresAt < expiresAt){
@@ -137,14 +148,14 @@ contract ExpireTracker {
             //bucket is empty
             //should find which bucket has depositing nft's closest neighbor
             // step 1 find prev bucket
-            uint64 prevCursor = bucket - BUCKET_STEP;
+            uint64 prevCursor = uint64( bucket.sub(BUCKET_STEP) );
             
-            while(checkPoints[prevCursor].tail != 0){
+            while(checkPoints[prevCursor].tail != EMPTY){
               prevCursor = uint64( prevCursor.sub(BUCKET_STEP) );
             }
     
-            uint96 prev = checkPoints[prevCursor].tail;
-            uint96 next = infos[prev].next;
+            uint160 prev = checkPoints[prevCursor].tail;
+            uint160 next = infos[prev].next;
     
             // step 2 link prev buckets tail - nft - next buckets head
             infos[expireId] = ExpireMetadata(next,prev,expiresAt);
@@ -156,15 +167,15 @@ contract ExpireTracker {
         }
     }
 
-    function pop(uint96 expireId) internal {
+    function pop(uint160 expireId) internal {
         uint64 expiresAt = infos[expireId].expiresAt;
         uint64 bucket = uint64( (expiresAt.div(BUCKET_STEP)).mul(BUCKET_STEP) );
         // check if bucket is empty
         // if bucket is empty, reverts
-        require(checkPoints[bucket].head != 0, "Info does not exist:Bucket empty");
+        require(checkPoints[bucket].head != EMPTY, "Info does not exist: Bucket empty");
         // if bucket is not empty, iterate through
         // if expiresAt of current cursor is larger than expiresAt of parameter, reverts
-        for(uint96 cursor = checkPoints[bucket].head; infos[cursor].expiresAt <= expiresAt; cursor = infos[cursor].next) {
+        for(uint160 cursor = checkPoints[bucket].head; infos[cursor].expiresAt <= expiresAt; cursor = infos[cursor].next) {
             ExpireMetadata memory info = infos[cursor];
             // if expiresAt is same of paramter, check if expireId is same
             if(info.expiresAt == expiresAt && cursor == expireId) {
@@ -180,7 +191,7 @@ contract ExpireTracker {
                 // if cursor was head of bucket
                 if(checkPoints[bucket].head == cursor){
                     // and cursor.next is still in same bucket, move head to cursor.next
-                    if(infos[info.next].expiresAt.div(BUCKET_STEP) == bucket.div(BUCKET_STEP)) {
+                    if(infos[info.next].expiresAt.div(BUCKET_STEP) == bucket.div(BUCKET_STEP)){
                         checkPoints[bucket].head == info.next;
                     } else {
                         // delete whole checkpoint if bucket is now empty
@@ -200,7 +211,19 @@ contract ExpireTracker {
             }
             // if not, continue -> since there can be same expires at with multiple expireId
         }
-        revert("Info does not exist");
+        revert("Info does not exist.");
+    }
+    
+    /**
+     * @dev Link previous to next, effectively removing this balance expiration. New expiration data will then be pushed into place.
+     * @param expireId Address of the user we are changing expiration for.
+    **/
+    function _remove(uint160 expireId) 
+      internal
+    {
+        ExpireMetadata memory info = infos[expireId];
+        infos[info.prev].next = info.next;
+        infos[info.next].prev = info.prev;
     }
 
     uint256[50] private __gap;

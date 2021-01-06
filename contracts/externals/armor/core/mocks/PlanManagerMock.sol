@@ -13,7 +13,7 @@ contract PlanManagerMock {
   function updateExpireTime(address _user)  external {
       emit UpdateExpireTime(_user);
   }
-  function mockChangePrice(address _balanceManager, address _user, uint256 _newPrice) external {
+  function mockChangePrice(address _balanceManager, address _user, uint64 _newPrice) external {
       IBalanceManager(_balanceManager).changePrice(_user, _newPrice);
   }
   function changePrice(address _contract, uint256 _newPrice) external {
@@ -23,7 +23,7 @@ contract PlanManagerMock {
   function mockCoverage(bool _coverage) external {
     coverage = _coverage;
   }
-  function checkCoverage(address _user, address _sc, uint256 _time, uint256 _amount, bytes32[] calldata _path) external view returns(uint256 index, bool check){
+  function checkCoverage(address _user, address _sc, uint256 _time, uint256 _amount) external view returns(uint256 index, bool check){
     return (0, coverage);
   }
 }

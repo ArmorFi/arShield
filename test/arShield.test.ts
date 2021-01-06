@@ -3,7 +3,7 @@ import { ethers } from "hardhat";
 import { Contract, Signer, BigNumber, constants } from "ethers";
 import { Uniswap } from "./Uniswap";
 import { ArmorCore } from "./ArmorCore";
-import { increase } from "./utils";
+import { increase, getTimestamp } from "./utils";
 const ETHER = BigNumber.from("1000000000000000000");
 describe("ArShield", function () {
   let accounts: Signer[];
@@ -11,6 +11,7 @@ describe("ArShield", function () {
   let weth: Contract;
   let owner : Signer;
   let user : Signer;
+  let referrer : Signer;
   let lpToken : Contract;
   let token0: Contract;
   let token1: Contract;
@@ -24,6 +25,7 @@ describe("ArShield", function () {
     accounts = await ethers.getSigners();
     owner = accounts[0];
     user = accounts[1];
+    referrer = accounts[2];
     const WETH = await ethers.getContractFactory("WETH9");
     weth = await WETH.deploy();
     const Token = await ethers.getContractFactory("ERC20Mock");
@@ -46,30 +48,77 @@ describe("ArShield", function () {
 
     const Shield = await ethers.getContractFactory("ArShieldLP");
     arShield = await Shield.deploy([token0.address, token1.address],[token0.address, weth.address], [token1.address, weth.address],
-      core.master.address,uniswap.router.address,lpToken.address,reward.address,BigNumber.from("1000"),1,uniswap.router.address,ETHER
+      core.master.address,uniswap.router.address,lpToken.address,reward.address,ETHER/*BigNumber.from("1000")*/,10,uniswap.router.address,ETHER
     );
   });
 
   describe("#stake()", function(){
     it("should fail if coverage is not enough", async function(){
       await core.increaseStake(uniswap.router, BigNumber.from(1));
-      await lpToken.approve(arShield.address, constants.MaxUint256);;
-      await expect(arShield.connect(owner).stake(ETHER.mul(2),constants.AddressZero)).to.be.revertedWith("Not enough coverage available for this stake.");
+      await lpToken.approve(arShield.address, constants.MaxUint256);
+      await expect(arShield.connect(owner).stake(ETHER.mul(2),referrer.getAddress())).to.be.revertedWith("Not enough coverage available for this stake.");
     });
     it("should be able to stake", async function(){
-      await core.increaseStake(uniswap.router, BigNumber.from(10000));
-      await lpToken.approve(arShield.address, constants.MaxUint256);;
-      await arShield.connect(owner).stake(ETHER,constants.AddressZero);
+      await core.increaseStake(uniswap.router, BigNumber.from(50));
+      await lpToken.approve(arShield.address, constants.MaxUint256);
+      await arShield.connect(owner).stake(ETHER,referrer.getAddress());
+    });
+    it("should fail if locked", async function(){
+      await core.increaseStake(uniswap.router, BigNumber.from(50));
+      await lpToken.approve(arShield.address, constants.MaxUint256);
+      await arShield.connect(owner).stake(ETHER,referrer.getAddress());
+      await increase(100);
+      await core.increaseStake(uniswap.router, BigNumber.from(50));
+      await arShield.connect(owner).stake(ETHER,referrer.getAddress());
+      await increase(10);
+      await arShield.liquidate();
+      await core.increaseStake(uniswap.router, BigNumber.from(50));
+      await arShield.connect(owner).stake(ETHER,referrer.getAddress());
+      await increase(50);
+      const time = await getTimestamp();
+      await core.hacked(uniswap.router, time.sub(1));
+      //await arShield.liquidate();
+      await arShield.claimCoverage(time.sub(1),1);
+      await core.increaseStake(uniswap.router, BigNumber.from(50));
+      await expect(arShield.connect(owner).stake(ETHER,referrer.getAddress())).to.be.reverted;
+    });
+    it("should decrease balance based on feePercent and increase stake", async function(){
+      await core.increaseStake(uniswap.router, BigNumber.from(50));
+      await lpToken.approve(arShield.address, constants.MaxUint256);
+      await arShield.connect(owner).stake(ETHER,referrer.getAddress());
+      await increase(50);
+      const before = await arShield.balanceOf(owner.getAddress());
+      const fee = before.div(2);
+      const referFee = fee.div(100);
+      await arShield.connect(owner).stake(ETHER,referrer.getAddress());
+      const after = await arShield.balanceOf(owner.getAddress());
+      expect(after).to.be.equal(before.sub(fee).add(ETHER));
+      expect(fee.sub(referFee)).to.be.equal(await arShield.feePool());
+      expect(await arShield.referralBalances(referrer.getAddress())).to.equal(referFee);
+    });
+    it("should clear balance if percent more than 100%", async function(){
+      await core.increaseStake(uniswap.router, BigNumber.from(50));
+      await lpToken.approve(arShield.address, constants.MaxUint256);
+      await arShield.connect(owner).stake(ETHER,referrer.getAddress());
+      await increase(1000);
+      const before = await arShield.balanceOf(owner.getAddress());
+      const fee = before;
+      const referFee = fee.div(100);
+      await arShield.connect(owner).stake(ETHER,referrer.getAddress());
+      const after = await arShield.balanceOf(owner.getAddress());
+      expect(after).to.be.equal(before.sub(fee).add(ETHER));
+      expect(fee.sub(referFee)).to.be.equal(await arShield.feePool());
+      expect(await arShield.referralBalances(referrer.getAddress())).to.equal(referFee);
     });
   });
 
   describe('#liquidate()', function(){
     beforeEach(async function(){
-      await core.increaseStake(uniswap.router, BigNumber.from(10000));
-      await lpToken.approve(arShield.address, constants.MaxUint256);;
-      await arShield.connect(owner).stake(ETHER,constants.AddressZero);
+      await core.increaseStake(uniswap.router, BigNumber.from(50));
+      await lpToken.approve(arShield.address, constants.MaxUint256);
+      await arShield.connect(owner).stake(ETHER,referrer.getAddress());
       await increase(1000000);
-      await arShield.connect(owner).stake(ETHER,constants.AddressZero);
+      await arShield.connect(owner).stake(ETHER,referrer.getAddress());
     });
 
     it("should fail if msg.sender is not eoa", async function(){
@@ -85,30 +134,68 @@ describe("ArShield", function () {
 
   describe('#withdraw()', function(){
     beforeEach(async function(){
-      await core.increaseStake(uniswap.router, BigNumber.from(10000));
-      await lpToken.approve(arShield.address, constants.MaxUint256);;
-      await arShield.connect(owner).stake(ETHER,constants.AddressZero);
-      await increase(1000000);
-      await arShield.connect(owner).stake(ETHER,constants.AddressZero);
+      await core.increaseStake(uniswap.router, BigNumber.from(50));
+      await lpToken.approve(arShield.address, constants.MaxUint256);
+      await arShield.connect(owner).stake(ETHER,referrer.getAddress());
+      await increase(10);
+      await arShield.connect(owner).stake(ETHER,referrer.getAddress());
       await arShield.connect(owner).liquidate();
     });
 
     it("should success", async function(){
       await arShield.connect(owner).withdraw(ETHER);
     });
+    it("can withdraw even hack", async function(){  
+      await core.increaseStake(uniswap.router, BigNumber.from(50));
+      await lpToken.approve(arShield.address, constants.MaxUint256);
+      await arShield.connect(owner).stake(ETHER,referrer.getAddress());
+      await increase(100);
+      await core.increaseStake(uniswap.router, BigNumber.from(50));
+      await arShield.connect(owner).stake(ETHER,referrer.getAddress());
+      await increase(10);
+      await arShield.liquidate();
+      await core.increaseStake(uniswap.router, BigNumber.from(50));
+      await arShield.connect(owner).stake(ETHER,referrer.getAddress());
+      await increase(50);
+      const time = await getTimestamp();
+      await core.hacked(uniswap.router, time.sub(1));
+      //await arShield.liquidate();
+      await arShield.claimCoverage(time.sub(1),1);
+      await core.increaseStake(uniswap.router, BigNumber.from(50));
+      await arShield.connect(owner).withdraw(ETHER.div(10));
+    });
   });
 
   describe('#exit()', function(){
     beforeEach(async function(){
-      await core.increaseStake(uniswap.router, BigNumber.from(10000));
-      await lpToken.approve(arShield.address, constants.MaxUint256);;
-      await arShield.connect(owner).stake(ETHER,constants.AddressZero);
+      await core.increaseStake(uniswap.router, BigNumber.from(50));
+      await lpToken.approve(arShield.address, constants.MaxUint256);
+      await arShield.connect(owner).stake(ETHER,referrer.getAddress());
       await increase(1000000);
-      await arShield.connect(owner).stake(ETHER,constants.AddressZero);
+      await arShield.connect(owner).stake(ETHER,referrer.getAddress());
       await arShield.connect(owner).liquidate();
     });
     
     it("should success", async function(){
+      await arShield.connect(owner).exit();
+    });
+    it("can exit even with hack", async function(){
+      await core.increaseStake(uniswap.router, BigNumber.from(50));
+      await lpToken.approve(arShield.address, constants.MaxUint256);
+      await arShield.connect(owner).stake(ETHER,referrer.getAddress());
+      await increase(100);
+      await core.increaseStake(uniswap.router, BigNumber.from(50));
+      await arShield.connect(owner).stake(ETHER,referrer.getAddress());
+      await increase(10);
+      await arShield.liquidate();
+      await core.increaseStake(uniswap.router, BigNumber.from(50));
+      await arShield.connect(owner).stake(ETHER,referrer.getAddress());
+      await increase(50);
+      const time = await getTimestamp();
+      await core.hacked(uniswap.router, time.sub(1));
+      //await arShield.liquidate();
+      await arShield.claimCoverage(time.sub(1),1);
+      await core.increaseStake(uniswap.router, BigNumber.from(50));
       await arShield.connect(owner).exit();
     });
   });

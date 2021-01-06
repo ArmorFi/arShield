@@ -27,6 +27,7 @@ export class ArmorCore {
     this.balanceManager = await Balance.connect(this.deployer).deploy();
     await this.balanceManager.initialize(this.master.address, this.deployer.getAddress());
     await this.registerModule("BALANCE", this.balanceManager);
+    await this.balanceManager.connect(this.deployer).toggleUF();
     
     const Claim = await ethers.getContractFactory("ClaimManager");
     this.claimManager = await Claim.connect(this.deployer).deploy();
@@ -47,6 +48,7 @@ export class ArmorCore {
     this.stakeManager = await Stake.connect(this.deployer).deploy();
     await this.stakeManager.initialize(this.master.address);
     await this.registerModule("STAKE", this.stakeManager);
+    await this.stakeManager.toggleUF();
     
     const ArNFT = await ethers.getContractFactory("arNFTMock");
     this.arNft = await ArNFT.connect(this.deployer).deploy();
@@ -67,13 +69,26 @@ export class ArmorCore {
 
   async increaseStake(protocol: Contract, stake: BigNumber) {
     await this.stakeManager.connect(this.deployer).allowProtocol(protocol.address, true);
-    const coverId = await this.arNft.coverId();
-    await this.arNft.connect(this.deployer).buyCover(protocol.address, "0x45544800", [stake,ETHER,100,10000000,1],
+    const coverId = await this.arNft.coverIdMock();
+    await this.arNft.mockFillEther({value:ETHER.mul(stake)});
+    await this.arNft.connect(this.deployer).buyCover(protocol.address, "0x45544800", [stake,ETHER,10,10000000,1],
       10000, 0, 
       ethers.utils.randomBytes(32),
       ethers.utils.randomBytes(32)
     );
     await this.arNft.connect(this.deployer).approve(this.stakeManager.address, coverId);
     await this.stakeManager.connect(this.deployer).stakeNft(coverId);
+  }
+
+  async hacked(protocol: Contract, hackTime: BigNumber) {
+    await this.claimManager.connect(this.deployer).confirmHack(protocol.address, hackTime);
+    const total = await this.arNft.totalSupply();
+    for(let i = 1; i< total; i++){
+      await this.claimManager.connect(this.deployer).submitNft(i, hackTime);
+      const claimId = await this.arNft.claimIdMock();
+      await this.arNft.mockSetCoverStatus(i,1);
+      await this.arNft.mockSetClaimStatus(claimId, 14);
+      await this.claimManager.redeemNft(i);
+    }
   }
 }
