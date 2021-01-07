@@ -9,6 +9,7 @@ import '../interfaces/IStakeManager.sol';
 import '../interfaces/IBalanceManager.sol';
 import '../interfaces/IPlanManager.sol';
 import '../interfaces/IClaimManager.sol';
+
 /**
  * @dev Separating this off to specifically doKeep track of a borrower's plans.
 **/
@@ -94,6 +95,7 @@ contract PlanManager is ArmorModule, IPlanManager {
         uint256 newPricePerSec;
         uint256 _markup = markup;
         
+        
         // Loop through protocols, find price per second, add to rate, add coverage amount to mapping.
         for (uint256 i = 0; i < _protocols.length; i++) {
             require(nftCoverPrice[_protocols[i]] != 0, "Protocol price is zero");
@@ -102,25 +104,31 @@ contract PlanManager is ArmorModule, IPlanManager {
             uint256 pricePerSec = nftCoverPrice[ _protocols[i] ].mul(_coverAmounts[i]);
             newPricePerSec = newPricePerSec.add(pricePerSec);
         }
-
-        if(_protocols.length == 0){
+        
+        //newPricePerSec = newPricePerSec * _markup / 1e18 for decimals / 100 to make up for markup (200 == 200%);
+        newPricePerSec = newPricePerSec.mul(_markup).div(1e18).div(100);
+        
+        // this means user is canceling all plans
+        if(newPricePerSec == 0){
             Plan memory newPlan;
             newPlan = Plan(uint64(now), uint64(-1), uint128(0));
             plans[msg.sender].push(newPlan);
             IBalanceManager(getModule("BALANCE")).changePrice(msg.sender, 0);
             emit PlanUpdate(msg.sender, _protocols, _coverAmounts, uint64(-1));
+            return;
         }
-        else { 
-        //newPricePerSec = newPricePerSec * _markup / 1e18 for decimals / 100 to make up for markup (200 == 200%);
-        newPricePerSec = newPricePerSec.mul(_markup).div(1e18).div(100);
 
         uint256 balance = IBalanceManager(getModule("BALANCE")).balanceOf(msg.sender);
         uint256 endTime = balance.div(newPricePerSec).add(block.timestamp);
+        
+        // Let's make sure a user can pay for this for at least a week. Weird manipulation of utilization farming could happen otherwise.
+        require(endTime >= block.timestamp.add(7 days), "Balance must be enough for 7 days of coverage.");
         
         //add plan
         Plan memory newPlan;
         newPlan = Plan(uint64(now), uint64(endTime), uint128(_protocols.length));
         plans[msg.sender].push(newPlan);
+        
         //add protocol plan
         for(uint256 i = 0;i<_protocols.length; i++){
             bytes32 key = keccak256(abi.encodePacked("ARMORFI.PLAN.",msg.sender,plans[msg.sender].length - 1,i));
@@ -134,7 +142,6 @@ contract PlanManager is ArmorModule, IPlanManager {
         IBalanceManager(getModule("BALANCE")).changePrice(msg.sender, castPricePerSec);
 
         emit PlanUpdate(msg.sender, _protocols, _coverAmounts, endTime);
-        }
     }
 
     /**
@@ -225,7 +232,11 @@ contract PlanManager is ArmorModule, IPlanManager {
      * @param _planIndex The index in the user's Plan array that we're checking.
      * @param _protocol Address of the protocol that a claim is being redeemed for.
     **/
-    function planRedeemed(address _user, uint256 _planIndex, address _protocol) external override onlyModule("CLAIM"){
+    function planRedeemed(address _user, uint256 _planIndex, address _protocol) 
+      external 
+      override 
+      onlyModule("CLAIM")
+    {
         Plan storage plan = plans[_user][_planIndex];
         require(plan.endTime <= now, "Cannot redeem active plan, update plan to redeem properly");
 
@@ -266,8 +277,8 @@ contract PlanManager is ArmorModule, IPlanManager {
         uint256 balance = IBalanceManager(getModule("BALANCE")).balanceOf(_user);
         uint256 pricePerSec = IBalanceManager(getModule("BALANCE")).perSecondPrice(_user);
         
-        if (plan.endTime >= now){
-            plan.endTime = uint64(balance / pricePerSec + now);
+        if (plan.endTime > block.timestamp) {
+            plan.endTime = uint64(balance.div(pricePerSec).add(block.timestamp));
         }
     }
     

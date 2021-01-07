@@ -61,8 +61,7 @@ contract ClaimManager is ArmorModule, IClaimManager {
         // Put Ether into 18 decimal format.
         uint256 payment = _amount * 10 ** 18;
         IPlanManager(getModule("PLAN")).planRedeemed(msg.sender, planIndex, _protocol);
-        (bool success, ) = msg.sender.call{value:payment}("");
-        require(success, "error while sending payment");
+        msg.sender.transfer(payment);
         
         emit ClaimPayout(hackId, msg.sender, _amount);
     }
