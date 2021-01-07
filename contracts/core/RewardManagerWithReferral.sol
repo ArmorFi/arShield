@@ -232,5 +232,14 @@ abstract contract RewardManagerWithReferral is VaultTokenWrapper, Ownable, IRewa
         require(_referPercent <= 1000, "Cannot give more than 100% of fees.");
         referPercent = _referPercent;
     }
+
+    function rescueToken(address token, uint256 amount)
+      external
+      onlyOwner
+    {
+        require(token != address(stakeToken), "Stake Token cannot escape!");
+        require(token != address(rewardToken), "Reward Token cannot escape!");
+        IERC20(token).safeTransfer(msg.sender, amount);
+    }
     
 }
