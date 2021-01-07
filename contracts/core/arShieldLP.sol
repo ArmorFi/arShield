@@ -76,8 +76,6 @@ contract ArShieldLP is Ownable, RewardManagerWithReferral, PoolFuncs {
         ammInitialize(_uniRouter, _lpToken, _baseTokens, _path0, _path1);
         armorMaster = IArmorMaster(_armorMaster);
         protocol = _protocol;
-
-        // Stack too deep...
         tokenPrice = _lpStartingPrice;
     }
     
