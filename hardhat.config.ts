@@ -1,11 +1,18 @@
 import "@nomiclabs/hardhat-waffle";
 import "solidity-coverage";
+import "hardhat-gas-reporter";
 import "hardhat-spdx-license-identifier";
 import "hardhat-log-remover";
 // You need to export an object to set up your config
 // Go to https://hardhat.org/config/ to learn more
 
 export default {
+  defaultNetwork: "hardhat",
+  gasReporter: {
+    enabled: true,
+    currency: "USD",
+    excludeContracts: ["contracts/mocks/", "contracts/externals/"],
+  },
   spdxLicenseIdentifier: {
     overwrite: true,
     runOnCompile: true,
