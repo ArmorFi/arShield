@@ -91,7 +91,7 @@ abstract contract RewardManagerWithReferral is VaultTokenWrapper, Ownable, IRewa
         _;
     }
 
-    modifier updateReward(address account) {
+    modifier updateReward(address account) virtual {
         rewardPerTokenStored = rewardPerToken();
         lastUpdateTime = lastTimeRewardApplicable();
         
@@ -188,7 +188,7 @@ abstract contract RewardManagerWithReferral is VaultTokenWrapper, Ownable, IRewa
         getReward();
     }
 
-    function getReward() public updateBalance(msg.sender) updateReward(msg.sender) {
+    function getReward() public virtual updateBalance(msg.sender) updateReward(msg.sender) {
         uint256 reward = earned(msg.sender);
         if (reward > 0) {
             rewards[msg.sender] = 0;
@@ -201,6 +201,7 @@ abstract contract RewardManagerWithReferral is VaultTokenWrapper, Ownable, IRewa
         external
         payable
         override
+        virtual
         onlyRewardDistribution
         updateReward(address(0))
     {
