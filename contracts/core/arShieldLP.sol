@@ -136,11 +136,11 @@ contract ArShieldLP is Ownable, RewardManagerWithReferral, PoolFuncs {
         IPlanManager(armorMaster.getModule("PLAN")).updatePlan(protocols, amounts);
     }
 
-    function stake(uint256 amount, address _referrer) public override notLocked checkCoverage(amount) {
+    function stake(uint256 amount, address _referrer) public virtual override notLocked checkCoverage(amount) {
         RewardManagerWithReferral.stake(amount,_referrer);
     }
 
-    function withdraw(uint256 amount) external override updateBalance(msg.sender) updateReward(msg.sender){
+    function withdraw(uint256 amount) public virtual override updateBalance(msg.sender) updateReward(msg.sender){
         require(amount > 0, "Cannot withdraw 0");
         RewardManagerWithReferral._withdraw(msg.sender, amount);
         // If a claim has been successful, also withdraw Ether.
@@ -151,7 +151,7 @@ contract ArShieldLP is Ownable, RewardManagerWithReferral, PoolFuncs {
         }
     }
 
-    function exit() external override updateBalance(msg.sender) updateReward(msg.sender){
+    function exit() public virtual override updateBalance(msg.sender) updateReward(msg.sender){
         uint256 amount = balanceOf(msg.sender);
         RewardManagerWithReferral._withdraw(msg.sender, amount);
         getReward();
@@ -215,6 +215,7 @@ contract ArShieldLP is Ownable, RewardManagerWithReferral, PoolFuncs {
     **/
     function unwrapLP(uint256 _amount)
       internal
+      virtual
       override
     {
         if(_amount > 0){

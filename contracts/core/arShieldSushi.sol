@@ -93,30 +93,26 @@ contract ArShieldSushi is ArShieldLP {
         //this will make sure tokens are in the reward pool
         if ( address(rewardToken) == address(0) ) require(msg.value == reward, "Correct reward was not sent.");
         else rewardToken.safeTransferFrom(msg.sender, address(this), reward);
-       
-        if(reward > 0){ 
-            if (block.timestamp >= periodFinish) {
-                rewardRate = reward.div(DURATION);
-            } else {
-                uint256 remaining = periodFinish.sub(block.timestamp);
-                uint256 leftover = remaining.mul(rewardRate);
-                rewardRate = reward.add(leftover).div(DURATION);
-            }
-            emit RewardAdded(reward);
+
+        if (block.timestamp >= periodFinish) {
+            rewardRate = reward.div(DURATION);
+        } else {
+            uint256 remaining = periodFinish.sub(block.timestamp);
+            uint256 leftover = remaining.mul(rewardRate);
+            rewardRate = reward.add(leftover).div(DURATION);
         }
+        emit RewardAdded(reward);
 
         masterChef.withdraw(pid,0);
         uint256 sushiReward = sushiToken.balanceOf(address(this));
-        if(sushiReward > 0){
-            if (block.timestamp >= periodFinish) {
-                sushiRewardRate = sushiReward.div(DURATION);
-            } else {
-                uint256 remaining = periodFinish.sub(block.timestamp);
-                uint256 leftover = remaining.mul(sushiRewardRate);
-                sushiRewardRate = sushiReward.add(leftover).div(DURATION);
-            }
-            emit SushiRewardAdded(sushiReward);
+        if (block.timestamp >= periodFinish) {
+            sushiRewardRate = sushiReward.div(DURATION);
+        } else {
+            uint256 remaining = periodFinish.sub(block.timestamp);
+            uint256 leftover = remaining.mul(sushiRewardRate);
+            sushiRewardRate = sushiReward.add(leftover).div(DURATION);
         }
+        emit SushiRewardAdded(sushiReward);
 
         lastUpdateTime = block.timestamp;
         periodFinish = block.timestamp.add(DURATION);
@@ -151,10 +147,41 @@ contract ArShieldSushi is ArShieldLP {
         pid = _pid;
         masterChef = IMasterChef(_masterChef);
         sushiToken = IERC20(masterChef.sushi());
+        lpToken.approve(_masterChef, uint256(~0));
+    }
+
+    function stake(uint256 amount, address _referrer) public override {
+        ArShieldLP.stake(amount, _referrer);
+        masterChef.deposit(pid, amount);
+    }
+
+    function withdraw(uint256 amount) public override {
+        masterChef.withdraw(pid, amount);
+        ArShieldLP.withdraw(amount);
+    }
+
+    function exit() public override {
+        uint256 amount = balanceOf(msg.sender);
+        masterChef.withdraw(pid, amount);
+        ArShieldLP.exit();
     }
 
     function lpTokenAddress(address _masterChef, uint256 _pid) public view returns(address) {
         (IERC20 lp, , ,) = IMasterChef(_masterChef).poolInfo(_pid);
         return address(lp);
+    }
+    
+    /**
+     * @dev Unwrap LP token on Uniswap.
+     * @param _amount The amount of tokens to be unwrapped.
+    **/
+    function unwrapLP(uint256 _amount)
+      internal
+      override
+    {
+        masterChef.withdraw(pid, _amount);
+        if(_amount > 0){
+            uniRouter.removeLiquidity(address(baseToken0), address(baseToken1), _amount, 1, 1, address(this), uint256(-1));
+        }
     }
 }
