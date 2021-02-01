@@ -8,8 +8,8 @@ import '../general/SafeMath.sol';
 contract ERC20Mock is IERC20 {
     using SafeMath for uint256;
 
-    string public name = "Mock Token";
-    string public symbol = "DOCK";
+    string public override name = "Mock Token";
+    string public override symbol = "DOCK";
     uint8 public decimals = 18;
     uint256 private _totalSupply;
 
