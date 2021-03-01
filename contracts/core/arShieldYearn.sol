@@ -98,6 +98,8 @@ contract ArShieldYearn is arERC20 {
             mintRequest = 0;
         } else if (mintRequest[msg.sender] == 0) {
             mintRequest[msg.sender] = block.timestamp;
+        } else {
+            revert("mint duration not passed");
         }
         _mint(msg.sender, arAmount);
     }
