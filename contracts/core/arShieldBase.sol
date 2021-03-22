@@ -7,6 +7,7 @@ import '../interfaces/IArmorMaster.sol';
 import '../interfaces/IPlanManager.sol';
 import '../interfaces/IClaimManager.sol';
 import '../interfaces/IBalanceManager.sol';
+import '../client/ArmorClient.sol';
 
 /**
  * @title Armor Shield Yearn
@@ -142,18 +143,32 @@ contract ArShieldYearn is ERC20 {
       notLocked
       notContract
     {
-        // Check how much ether we would need to cover, return ether per token
-        // Determine how much is needed to make 1 month of coverage
-        // if we don't need more, return
-        // 
-        uint256 ethPerToken = _findEthPerToken();
-        uint256 reqCover = ethPerToken * totalSupply();
-        uint256 refillNeeded = _findMonthCost(reqCover);
-        require(refillNeeded > 0, "No deposit is currently necessary.");
-        _liquidate(refillNeeded);
-        _addBalance();
-        _updateCoverage(allowedCoverage(reqCover));
+        // Determine how much is available, how much it costs, and whether we need to add more balance.
+        uint256 availableCover = ArmorCore.availableCover(protocol, funds);
+        uint256 pricePerSec = ArmorCore.calculatePricePerSec(protocol, availableCover);
+        uint256 balance = ArmorCore.balanceOf();
+        uint256 addition = balance > pricePerSec * 30 days ? 0 : pricePerSec - balance;
+        require(addition > 0, "No addition needed at this time.");
+
+        // Find ethPerToken and such
+
+        _liquidate(addition);
+        ArmorCore.deposit(addition);
+        ArmorCore.subscribe(protocol, availableCover);
+
         msg.sender.transfer(topUpReward);
+    }
+    
+    /**
+     * @dev Here we determine needed value of pToken, redeem tokens for value, exchange for Ether.
+     * @param _refillNeeded Amount of Ether we need to liquidate tokens for.
+    **/
+    function _liquidate(uint256 _refillNeeded)
+      internal
+    {
+    
+        uint256 ethPerToken = _findEthPerToken;
+        
     }
 
     /**
@@ -165,39 +180,7 @@ contract ArShieldYearn is ERC20 {
     returns (uint256 ethPerToken)
     {
         uint256 uTokenPerPToken = pToken.getPricePerFullShare();
-        ethPerToken = uniswap.tokenToEther(uTokenPerPToken);            
-    }
-
-    /**
-     * @dev Find out how much a month of coverage will cost and whether we need to refill.
-     * @param _reqCover The required amount of coverage we need.
-     * @return refillNeeded How much more Ether we need in balance to refill.
-    **/
-    function _findMonthCost(uint256 _reqCover)
-      internal
-    returns (uint256 refillNeeded)
-    {
-        uint256 balance = balanceManager.balanceOf( address(this) );
-        // .div(100) because of markup's format (150% == 150)
-        uint256 currentCoverPrice = planManager.nftCoverPrice.mul(planManager.markup).div(100);
-        // currentCoverPrice is per full Ether rather than Wei so we need to remove decimals.
-        uint256 newCoverPrice = _reqCover * currentCoverPrice / 1e18;
-        uint256 monthPrice = newCoverPrice * 30 days;
-        refillNeeded = balance >= monthPrice ? 0 : monthPrice.sub(balance);
-    }
-    
-    /**
-     * @dev Here we determine needed value of pToken, redeem tokens for value, exchange for Ether.
-     * @param _refillNeeded Amount of Ether we need to liquidate tokens for.
-    **/
-    function _liquidate(uint256 _refillNeeded)
-      internal
-    {
-    
-        uint256 reqRedeem = uniswap.etherToToken()
-        
-        // Determine Ether value of underlying token
-        uint256 ethPerShare
+        ethPerToken = uniswap.tokenToEther(uTokenPerPToken);       
     }
 
     /**
@@ -266,22 +249,6 @@ contract ArShieldYearn is ERC20 {
     }
 
     /**
-     * @dev Checks how much coverage is allowed on the contract. Buys as much as possible.
-     *      Needed on this contract so we don't accept more funds than available as coverage.
-     * @param _fullCoverage The full amount of coverage we want.
-     * @return Amount of cover able to be purchased.
-    **/
-    function allowedCoverage(uint256 _fullCoverage)
-      public
-      view
-    returns (uint256)
-    {
-        uint256 available = IPlanManager(armorMaster.getModule("PLAN")).coverageLeft(protocol);
-        // Add current coverage because coverageLeft on planManager does not include what we're currently using.
-        return available.add(currentCoverage) >= _fullCoverage ? _fullCoverage : available;
-    }
-
-    /**
      * @dev Sends Ether if the contract is locked and Ether is in it.
     **/
     function _sendEther(uint256 _arAmount)
@@ -292,37 +259,13 @@ contract ArShieldYearn is ERC20 {
     }
 
     /**
-     * @dev Add all Ether balance to the arCore account of this contract.
-    **/
-    function _addBalance()
-      internal
-    {
-        IBalanceManager(armorMaster.getModule("BALANCE")).deposit{value: address(this).balance}( address(0) );
-    }
-    
-    /**
-     * @dev Update coverage amount on arCore for this contract.
-     * @param _amount Amount of Ether in Wei to be covered.
-    **/
-    function _updateCoverage(uint256 _amount)
-      internal
-    {
-        address[] memory protocols = new address[](1);
-        protocols[0] = protocol;
-        uint256[] memory amounts = new uint256[](1);
-        amounts[0] = _amount;
-        IPlanManager(armorMaster.getModule("PLAN")).updatePlan(protocols, amounts);
-    }
-    
-    /**
      * @dev End coverage when a claim occurs.
     **/
     function _endCoverage()
-      internal
+      external
+      onlyOwner
     {
-        address[] memory protocols = new address[](0);
-        uint256[] memory amounts = new uint256[](0);
-        IPlanManager(armorMaster.getModule("PLAN")).updatePlan(protocols, amounts);
+        ArmorCore.cancelPlan();
     }
 
     /**
