@@ -3,53 +3,90 @@ import '../client/ArmorClient.sol';
 
 contract CoverageBase is ArmorClient, Ownable {
     
-    // The protocol that this contract purchases coverage for.
-    address public protocol;
-    
-    // Percent of funds from shields to cover.
-    uint256 public coverPct;
-    
-    // Total Ether value to be protecting in the contract.
-    uint256 public totalEthValue;
-    
-    // sum of cost per token for every second -- cumulative lol
-    uint256 public cumCost;
-    
-    // Last update of cumCost and cumValue.
-    uint256 public lastUpdate;
-    
     // Denominator for coverage percent.
     uint256 public constant DENOMINATOR = 1000;
-    
-    // Shields that are authorized to use this contract.
-    mapping (address => bool) public shields;
-    
-    // The last amount that a shield paid for coverage at.
-    mapping (address => uint256) public lastCumCost;
-    
-    // lmao having too much fun.
-    mapping (address => uint256) public lastCumValue;
-    
-    // Value in Ether of each shield vault.
+    // The protocol that this contract purchases coverage for.
+    address public protocol;
+    // Total Ether value to be protecting in the contract.
+    uint256 public totalEthValue;
+    // Percent of funds from shields to cover.
+    uint256 public coverPct;
+    // Current cost per second per Ether.
+    uint256 public currentCost;
+    // sum of cost per token for every second -- cumulative lol
+    uint256 public cumCost;
+    // Last update of cumCost.
+    uint256 public lastUpdate;
+    // Value in Ether and last updates of each shield vault.
     mapping (address => ShieldStats) public shieldStats;
     
-    // TODO: can be packed tighter
+    // Every time a shield updates it saves the full contracts cumulative cost, its Ether value, and 
     struct ShieldStats {
-        uint256 ethValue;
         uint256 lastCumCost;
-        uint256 lastUpdate;
+        uint128 ethValue;
+        uint128 lastUpdate;
     }
     
-    receive() external payable {}
-    
+    /**
+     * @dev Called by a keeper to update the amount covered by this contract on arCore.
+    **/
     function updateCoverage()
       external
     {
-        uint256 coverage = totalEthValue * coverPct / DENOMINATOR;
-        // get coverage cost
-        ArmorClient.subscribe(protocol, coverage);
+        ArmorClient.subscribe( protocol, getCoverage() );
         checkpoint();
-        currentCost = coverageCost;
+        currentCost = getCoverageCost() * 1 ether / getCoverage();
+    }
+    
+    /**
+     * @dev arShield uses this to update the value of funds on their contract and deposit payments to here.
+     *      We're okay with being loose-y goose-y here in terms of making sure shields pay (no cut-offs, timeframes, etc.).
+     * @param _newEthValue The new Ether value of funds in the shield contract.
+    **/
+    function update(
+        uint256 _newEthValue
+    )
+      external
+      payable
+    {
+        ShieldStats memory stats = shieldStats[msg.sender];
+        require(stats.lastUpdate > 0, "Only arShields may access this function.");
+        
+        // Determine how much the shield owes for the last period.
+        uint256 owed = getShieldOwed(stats);
+        require(msg.value >= owed, "Shield is not paying enough for the coverage provided.");
+        
+        totalEthValue = totalEthValue 
+                        - uint256(stats.ethValue)
+                        + _newEthValue;
+
+        shieldStats[msg.sender] = ShieldStats( cumCost, uint128(_newEthValue), uint128(block.timestamp) );
+        checkpoint()
+    }
+    
+    /**
+     * @dev CoverageBase tells shield what % of current coverage it must pay.
+     * @param _stats Information of the shield in question.
+    **/
+    function getShieldOwed(
+        ShieldStats memory _stats
+    )
+      public
+      view
+    returns(
+        uint256 owed
+    )
+    {
+        ShieldStats memory stats = shieldStats[_shield];
+
+        // difference between 
+        uint256 pastDiff = cumCost - stats.lastCumCost;
+        uint256 currentDiff = currentCost * ( block.timestamp - uint256(lastUpdate) ); // times new value?
+        
+        owed = uint256(stats.ethValue) 
+                * pastDiff 
+                + uint256(stats.ethValue)
+                * currentDiff;
     }
     
     /**
@@ -58,53 +95,50 @@ contract CoverageBase is ArmorClient, Ownable {
     function checkpoint()
       internal
     {
-        cumCost += currentCost * (block.timestamp - lastUpdate) * 1 ether / totalEthValue;
+        cumCost += currentCost * (block.timestamp - lastUpdate) 
         lastUpdate = block.timestamp;
     }
     
     /**
-     * @dev arShield uses this to update the value of funds on their contract and deposit payments to here.
+     * @dev Get the amount of coverage for all shields' current values.
     **/
-    function deposit(
-        uint256 _newEthValue
+    function getCoverage()
+      public
+      view
+    returns (
+        uint256
     )
-      external
-      payable
     {
-        // do we also do the last payment here?
-        require(shields[msg.sender], "Only arShields may access this function.");
-
-        
-        // need a variable to do cost per token every time a deposit is made
-        
-        // do we want to fail the transfer if not enough is given?
-        // shield owes: 
-        ShieldStats memory stats = shieldStats[msg.sender];
-        uint256 costDiff = cumCost - stats.lastCumCost;
-        uint256 currentDiff = currentCost * (block.timestamp - lastUpdate);
-        uint256 owed = ethValues[msg.sender] * costDiff + ethValues[msg.sender] * currentDiff;
-        
-        totalEthValue = totalEthValue - ethValues[msg.sender] + _newEthValue;
-        ethValues[msg.sender] = _newEthValue;
-        
-        // update cumCost and lastUpdate here as well
-        
-        shieldStats[msg.sender] = ShieldStates(_newEthValue, cumCost, block.timestamp);
-        checkpoint()
+        return totalEthValue * coverPct / DENOMINATOR;
     }
     
     /**
-     * @dev CoverageBase tells shield what % of current coverage it must pay.
+     * @dev Get the cost of coverage for all shields' current values.
     **/
-    function getShieldCost(
-        address _shield
-    )
+    function getCoverageCost()
       public
       view
+    returns (
+        uint256
+    )
     {
-        uint256 shieldValue = ethValues[_shield];
-        // WON'T WORK
-        return getCoverageCost() * shieldValue / totalEthValue;
+        return ArmorClient.cost( protocol, getCoverage() );
+    }
+    
+    /**
+     * @dev Either add or delete a shield.
+     * @param _shield Address of the shield to edit.
+     * @param _active Whether we want it to be added or deleted.
+    **/
+    function editShield(
+        address _shield,
+        bool _active
+    )
+      external
+      onlyGov
+    {
+        // If active, set timestamp of last update to now, else delete.
+        shieldStats[_shield] = ShieldStats(cumCost, 0, block.timestamp) ? _active : delete shieldStats[_shield]; 
     }
     
     /**
@@ -146,30 +180,6 @@ contract CoverageBase is ArmorClient, Ownable {
     {
         require(shields[_shield], "Shield is not authorized to use this contract.");
         _shield.transfer(_amount);
-    }
-    
-    function getCoverage()
-      public
-      view
-    returns (uint256)
-    {
-        return totalEthValue * coverPct / DENOMINATOR;
-    }
-    
-    function getCoverageCost()
-      public
-      view
-    returns (uint256)
-    {
-        return ArmorClient.cost( getCoverage() );
-    }
-    
-    function getShieldCost(address _shield)
-      public
-      view
-    returns (uint256)
-    {
-        
     }
     
     /**
