@@ -36,6 +36,7 @@ contract CoverageBase is ArmorClient, Ownable {
     function updateCoverage()
       external
     {
+        ArmorCore.deposit( address(this).balance );
         ArmorCore.subscribe( protocol, getCoverage() );
         totalCost = getCoverageCost();
         checkpoint();
@@ -144,6 +145,17 @@ contract CoverageBase is ArmorClient, Ownable {
         // If active, set timestamp of last update to now, else delete.
         if (_active) shieldStats[_shield] = ShieldStats( cumCost, 0, uint128(block.timestamp) );
         else delete shieldStats[_shield]; 
+    }
+    
+    /**
+     * @dev Withdraw an amount of funds from arCore.
+    **/
+    function withdraw(address payable _beneficiary, uint256 _amount)
+      external
+      onlyOwner
+    {
+        ArmorCore.withdraw(_amount);
+        _beneficiary.transfer(_amount);
     }
     
     /**
