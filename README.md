@@ -1,5 +1,9 @@
 # arShield LP
 
+Updated info at the bottom of this doc: https://docs.google.com/document/d/1GBPVR2ZAVbmj2jOhRcIgSFP_3oGFHrON8L3hEEvC5jo/edit?usp=sharing
+<br>
+<br>
+
 arShields will be contracts allowing users to stake on a variety of platforms directly through Armor and, in doing so, automatically purchase coverage for those funds. arShield LP is the first arShield, enabling users to stake their LP tokens from Uniswap or Balancer, gain ARMOR rewards, and gain full coverage for their funds through paying a % of tokens per year. 
 <br>
 <br>
