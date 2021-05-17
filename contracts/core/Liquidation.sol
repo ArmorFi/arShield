@@ -45,6 +45,20 @@ contract YearnLiquidation is Liquidation {
     // redeem
         // if super.
     
+    /**
+     * @dev Finds the amount of cover required to protect all holdings and returns Ether value of 1 token.
+     * @return ethPerToken Ether value of each pToken.
+    **/
+    function _findEthPerToken()
+      internal
+    returns (
+        uint256 ethPerToken
+    )
+    {
+        uint256 uTokenPerPToken = pToken.getPricePerFullShare();
+        ethPerToken = uniswap.tokenToEther(uTokenPerPToken);       
+    }
+    
 }
 
 contract YearnCRVLiquidation is arShield {

@@ -3,26 +3,20 @@ import '../general/SafeMath.sol';
 import '../interfaces/IyDAI.sol';
 
 /**
- * @title Armor Shield Yearn
- * @dev arShield accepts Yearn tokens, returns arTokens, those tokens are automatically insured.  
+ * @title Armor Shield Base
+ * @dev arShield base provides the base functionality of arShield contracts. It does not provide liquidation strategies
  * @author Armor.Fi -- Robert M.C. Forster
 **/
-contract ArShieldYearn {
+contract arShieldBase {
 
     using SafeMath for uint;
 
     // Buffer amount for division.
     uint256 constant private BUFFER = 1e18;
-    // The protocol that this contract buys coverage for (Nexus Mutual address for Uniswap/Balancer/etc.).
-    address[] public protocols;
-    // If the Yearn vault is a Curve token, we must unwrap before selling.
-    bool public crvToken;
-    // Ether value of this shield.
-    uint256 public ethValue;
-    // Beneficiary may withdraw any extra Ether after a claims period.
-    address payable public beneficiary;
     // Whether or not the contract is locked.
     bool public locked;
+    // Beneficiary may withdraw any extra Ether after a claims period.
+    address payable public beneficiary;
     // Block at which users must be holding tokens to receive a payout.
     uint256 public payoutBlock;
     // Amount of Ether given to user who notified of a hack.
@@ -49,9 +43,12 @@ contract ArShieldYearn {
         uint208 requestAmount;
     }
 
-    event MintRequest(address user, uint256 amount, uint256 timestamp);
-    event MintFinalized(address user, uint256 amount, uint256 timestamp);
-    event Redemption(address user, uint256 amount, uint256 timestamp);
+    event MintRequest(address indexed user, uint256 amount, uint256 timestamp);
+    event MintFinalized(address indexed user, uint256 amount, uint256 timestamp);
+    event Redemption(address indexed user, uint256 amount, uint256 timestamp);
+    event Locked(address reporter, uint256 timestamp);
+    event Unlocked(uint256 timestamp);
+    event HackConfirmed(uint256 payoutBlock, uint256 timestamp);
 
     modifier locked {
         require(locked, "You may not do this while the contract is unlocked.");
@@ -63,6 +60,8 @@ contract ArShieldYearn {
         require(!locked, "You may not do this while the contract is locked.");
         _;
     }
+    
+    receive() external payable;
     
     /**
      * @dev Initialize the contract
@@ -127,32 +126,6 @@ contract ArShieldYearn {
     }
 
     /**
-     * @dev Finds the amount of cover required to protect all holdings and returns Ether value of 1 token.
-     * @return ethPerToken Ether value of each pToken.
-    **/
-    function _findEthPerToken()
-      internal
-    returns (
-        uint256 ethPerToken
-    )
-    {
-        uint256 uTokenPerPToken = pToken.getPricePerFullShare();
-        ethPerToken = uniswap.tokenToEther(uTokenPerPToken);       
-    }
-
-    /**
-     * @dev If the contract was locked because of a hack, it may be unlocked 1 month later.
-    **/
-    function unlock()
-      external
-      locked
-    {
-        require(block.timestamp.sub(lockPeriod) > lockTime, "You may not unlock until the total lock period has passed.")
-        locked = false;
-        lockTime = 0;
-    }
-
-    /**
      * @dev Funds may be withdrawn to beneficiary if any are leftover after a hack.
      * TODO: Add ability to withdraw tokens other than arToken
     **/
@@ -176,6 +149,7 @@ contract ArShieldYearn {
         depositor = msg.sender;
         locked = true;
         lockTime = block.timestamp;
+        emit Locked(msg.sender, block.timestamp);
     }
 
     /**
@@ -237,9 +211,11 @@ contract ArShieldYearn {
       external
       onlyController
     {
+        // TODO: change to safe transfer
         depositor.transfer(depositReward);
         delete depositor;
         payoutBlock = _payoutBlock;
+        emit HackConfirmed(_payoutBlock, block.timestamp);
     }
     
     /**
@@ -247,10 +223,12 @@ contract ArShieldYearn {
     **/
     function unlock()
       external
+      locked
       onlyController
     {
         locked = false;
         lockTime = 0;
+        emit Unlocked(block.timestamp);
     }
     
     /**
