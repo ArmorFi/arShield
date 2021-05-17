@@ -1,5 +1,6 @@
-pragma solidity 0.6.6;
+pragma solidity 0.6.12;
 import '../client/ArmorClient.sol';
+import '../general/Ownable.sol';
 
 contract CoverageBase is ArmorClient, Ownable {
     
@@ -7,16 +8,18 @@ contract CoverageBase is ArmorClient, Ownable {
     uint256 public constant DENOMINATOR = 1000;
     // The protocol that this contract purchases coverage for.
     address public protocol;
-    // Total Ether value to be protecting in the contract.
-    uint256 public totalEthValue;
     // Percent of funds from shields to cover.
     uint256 public coverPct;
+    // Current cost per second for all Ether on contract.
+    uint256 public totalCost;
     // Current cost per second per Ether.
-    uint256 public currentCost;
-    // sum of cost per token for every second -- cumulative lol
+    uint256 public costPerEth;
+    // sum of cost per Ether for every second -- cumulative lol.
     uint256 public cumCost;
     // Last update of cumCost.
     uint256 public lastUpdate;
+    // Total Ether value to be protecting in the contract.
+    uint256 public totalEthValue;
     // Value in Ether and last updates of each shield vault.
     mapping (address => ShieldStats) public shieldStats;
     
@@ -33,9 +36,9 @@ contract CoverageBase is ArmorClient, Ownable {
     function updateCoverage()
       external
     {
-        ArmorClient.subscribe( protocol, getCoverage() );
+        ArmorCore.subscribe( protocol, getCoverage() );
+        totalCost = getCoverageCost();
         checkpoint();
-        currentCost = getCoverageCost() * 1 ether / getCoverage();
     }
     
     /**
@@ -43,7 +46,7 @@ contract CoverageBase is ArmorClient, Ownable {
      *      We're okay with being loose-y goose-y here in terms of making sure shields pay (no cut-offs, timeframes, etc.).
      * @param _newEthValue The new Ether value of funds in the shield contract.
     **/
-    function update(
+    function updateShield(
         uint256 _newEthValue
     )
       external
@@ -53,23 +56,23 @@ contract CoverageBase is ArmorClient, Ownable {
         require(stats.lastUpdate > 0, "Only arShields may access this function.");
         
         // Determine how much the shield owes for the last period.
-        uint256 owed = getShieldOwed(stats);
+        uint256 owed = getShieldOwed(msg.sender);
         require(msg.value >= owed, "Shield is not paying enough for the coverage provided.");
         
         totalEthValue = totalEthValue 
                         - uint256(stats.ethValue)
                         + _newEthValue;
 
+        checkpoint();
         shieldStats[msg.sender] = ShieldStats( cumCost, uint128(_newEthValue), uint128(block.timestamp) );
-        checkpoint()
     }
     
     /**
      * @dev CoverageBase tells shield what % of current coverage it must pay.
-     * @param _stats Information of the shield in question.
+     * @param _shield Address of the shield to get owed amount for.
     **/
     function getShieldOwed(
-        ShieldStats memory _stats
+        address _shield
     )
       public
       view
@@ -78,10 +81,10 @@ contract CoverageBase is ArmorClient, Ownable {
     )
     {
         ShieldStats memory stats = shieldStats[_shield];
-
-        // difference between 
+        
+        // difference between current cumulative and cumulative at last shield update
         uint256 pastDiff = cumCost - stats.lastCumCost;
-        uint256 currentDiff = currentCost * ( block.timestamp - uint256(lastUpdate) ); // times new value?
+        uint256 currentDiff = costPerEth * ( block.timestamp - uint256(lastUpdate) );
         
         owed = uint256(stats.ethValue) 
                 * pastDiff 
@@ -90,12 +93,13 @@ contract CoverageBase is ArmorClient, Ownable {
     }
     
     /**
-     * @dev Record total values from last period.
+     * @dev Record total values from last period and set new ones.
     **/
     function checkpoint()
       internal
     {
-        cumCost += currentCost * (block.timestamp - lastUpdate) 
+        cumCost += costPerEth * (block.timestamp - lastUpdate);
+        costPerEth = totalCost * 1 ether / totalEthValue;
         lastUpdate = block.timestamp;
     }
     
@@ -122,7 +126,7 @@ contract CoverageBase is ArmorClient, Ownable {
         uint256
     )
     {
-        return ArmorClient.cost( protocol, getCoverage() );
+        return ArmorCore.calculatePricePerSec( protocol, getCoverage() );
     }
     
     /**
@@ -135,10 +139,11 @@ contract CoverageBase is ArmorClient, Ownable {
         bool _active
     )
       external
-      onlyGov
+      onlyOwner
     {
         // If active, set timestamp of last update to now, else delete.
-        shieldStats[_shield] = ShieldStats(cumCost, 0, block.timestamp) ? _active : delete shieldStats[_shield]; 
+        if (_active) shieldStats[_shield] = ShieldStats( cumCost, 0, uint128(block.timestamp) );
+        else delete shieldStats[_shield]; 
     }
     
     /**
@@ -146,9 +151,9 @@ contract CoverageBase is ArmorClient, Ownable {
     **/
     function cancelCoverage()
       external
-      onlyGov
+      onlyOwner
     {
-        ArmorClient.cancelPlan();
+        ArmorCore.cancelPlan();
     }
     
     /**
@@ -161,9 +166,9 @@ contract CoverageBase is ArmorClient, Ownable {
         uint256 _amount
     )
       external
-      onlyGov
+      onlyOwner
     {
-        ArmorClient.claim(protocol, _hackTime, _amount);
+        ArmorCore.claim(protocol, _hackTime, _amount);
     }
     
     /**
@@ -176,9 +181,9 @@ contract CoverageBase is ArmorClient, Ownable {
         uint256 _amount
     )
       external
-      onlyGov
+      onlyOwner
     {
-        require(shields[_shield], "Shield is not authorized to use this contract.");
+        require(shieldStats[_shield].lastUpdate > 0, "Shield is not authorized to use this contract.");
         _shield.transfer(_amount);
     }
     
@@ -190,7 +195,7 @@ contract CoverageBase is ArmorClient, Ownable {
         uint256 _newPct
     )
       external
-      onlyGov
+      onlyOwner
     {
         require(_newPct <= 1000, "Coverage percent may not be greater than 100%.");
         coverPct = _newPct;    
