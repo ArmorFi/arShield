@@ -97,19 +97,19 @@ contract arShieldBase {
     {
         MintRequest memory mintRequest = mintRequests[_beneficiary];
         
-        if (block.timestamp.sub(mintDelay) > mintRequest.requestTime) {
-            
-            delete mintRequests[_beneficiary];
-            _mint(_beneficiary, mintRequest.requestAmount);
-            emit MintFinalized(_beneficiary, mintRequest.requestAmount, block.timestamp);
-        
-        } else if (mintRequest.requestTime == 0) {
+        if (mintRequest.requestTime == 0) {
             
             uint256 arAmount = arValue(_pAmount);
             pToken.transferFrom(_beneficiary, address(this), _pAmount);
             mintRequests[_beneficiary] = MintRequest(block.timestamp, arAmount);
             emit MintRequest(_beneficiary, arAmount, block.timestamp);
             
+        } else if (block.timestamp.sub(mintDelay) > mintRequest.requestTime) {
+            
+            delete mintRequests[_beneficiary];
+            _mint(_beneficiary, mintRequest.requestAmount);
+            emit MintFinalized(_beneficiary, mintRequest.requestAmount, block.timestamp);
+        
         }
     }
 
