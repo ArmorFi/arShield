@@ -19,16 +19,10 @@ contract arShieldBase {
     address payable public beneficiary;
     // Block at which users must be holding tokens to receive a payout.
     uint256 public payoutBlock;
-    // Amount of Ether given to user who notified of a hack.
-    uint256 public depositReward;
-    // Amount of Ether required to notify of a hack and temporarily lock contract.
-    uint256 public depositAmount;
     // User who deposited to notify of a hack.
     address public depositor;
-    // Delay (in seconds) between mint request and actual minting.
-    uint256 public mintDelay;
     // 0.25% paid for minting in order to pay for the first week of coverage--can be immediately liquidated.
-    uint256 public mintFees;
+    uint256 public fees;
     // User => timestamp of when minting was requested.
     mapping (address => MintRequest) public mintRequests;
 
@@ -42,6 +36,7 @@ contract arShieldBase {
     Oracle public oracle;
     // Controller of the arShields.
     ShieldController public controller;
+    // Coverage bases that we need to be paying.
 
     // Time and amount a user would like to mint.
     struct MintRequest {
@@ -75,21 +70,25 @@ contract arShieldBase {
      * @param _pToken The protocol token we're protecting.
     **/
     function initialize(
+        address _arToken,
         address _pToken, 
         address _uToken, 
-        address _oracle
+        address _oracle,
+        address[] _covBases
     )
       external
     {
         pToken = IERC20(_pToken);
         uToken = IERC20(_uToken);
         oracle = Oracle(_oracle);
+        controller = Controller(msg.sender);
     }
 
     /**
      * @dev User deposits pToken, is returned arToken. Amount returned is judged based off amount in contract.
      *      Amount returned will likely be more than deposited because pTokens will be removed to pay for cover.
      * @param _pAmount Amount of pTokens to deposit to the contract.
+     * @param _beneficiary User who a finalized mint may be sent to
     **/
     function mint(
         uint256 _pAmount, 
@@ -102,10 +101,13 @@ contract arShieldBase {
         
         if (mintRequest.requestTime == 0) {
             
-            uint256 arAmount = arValue(_pAmount);
-            pToken.transferFrom(_beneficiary, address(this), _pAmount);
-            mintRequests[_beneficiary] = MintRequest(block.timestamp, arAmount);
-            emit MintRequest(_beneficiary, arAmount, block.timestamp);
+            uint256 fee = _pAmount.mul(controller.fee).div(DENOMINATOR);
+            fees = fees.add(fee);
+            uint256 arAmount = arValue( _pAmount.sub(fee) );
+
+            pToken.transferFrom(msg.sender, address(this), _pAmount);
+            mintRequests[msg.sender] = MintRequest(block.timestamp, arAmount);
+            emit MintRequest(msg.sender, arAmount, block.timestamp);
             
         } else if (block.timestamp.sub(controller.mintDelay) > mintRequest.requestTime) {
             
@@ -123,7 +125,11 @@ contract arShieldBase {
     {
         uint256 pAmount = pValue(_arAmount);
         _burn(msg.sender, _arAmount);
-        arToken.transfer(msg.sender, pAmount);
+
+        uint256 fee = pAmount.mul(controller.fee).div(DENOMINATOR);
+        fees = fees.add(fee);
+        arToken.transfer( msg.sender, pAmount.sub(fee) );
+
         if (locked() && address(this).balance > 0) _sendClaim(_pAmount);
         emit Redemption(msg.sender, _arAmount, block.timestamp);
     }
@@ -131,23 +137,55 @@ contract arShieldBase {
     /**
      * @dev Liquidate for payment for coverage by selling to people at oracle price.
     **/
-    function liquidate()
+    function liquidate(uint256 covIdx)
       external
       override
       payable
       nonReentrant
     {
-        // Find amount owed in Ether, find amount owed in underlying ('u'), redeem Yearn for that amount, send to liquidator, get Ether back.
-        uint256 ethOwed = getOwed();
-        require(msg.value >= ethOwed, "Must send correct Ether amount.");
-        
-        uint256 baseRedeem = oracle.getTokensOwed(ethOwed, pToken, uTokenLink);
+        (uint256 ethOwed, 
+         uint256 tokenValue, 
+         uint256 tokensOwed
+        ) = liqAmounts(covIdx);
+
+        uint256 ethIn = msg.value;
+        uint256 tokensOut = ethIn
+                            .mul(tokensOwed)
+                            .div(ethOwed);
+
+        uint256 ethValue = pToken.balanceOf( address(this) )
+                            .mul(ethOwed)
+                            .div(tokenValue); 
+
+        CovBase(covBases[covIdx]).updateShield(ethValue).value(ethIn);
+        pToken.safeTransfer(msg.sender, tokensOut);
+    }
+
+    /**
+     * @dev Amounts owed to be liquidated.
+     * @return ethOwed Amount of Ether owed to coverage base.
+     * @return tokensOwed Amount of tokens owed to liquidator for that Ether.
+    **/
+    function liqAmounts(uint256 covIdx)
+      public
+      view
+    returns(
+        uint256 ethOwed,
+        uint256 tokenValue,
+        uint256 tokensOwed
+    )
+    {
+        // Find amount owed in Ether, find amount owed in protocol tokens.
+        ethOwed = CovBase(covBases[covIdx]).getOwed( address(this) );
+        tokenValue = oracle.getTokensOwed(ethOwed, pToken, uTokenLink);
+
+        // Find the Ether value of the mint fees we have.
+        uint256 ethFees = mintFees.mul(ethOwed).div(tokensOwed);
         // Add a bonus of 0.5%.
-        uint256 bonusRedeem = baseRedeem + (baseRedeem * bonus / DENOMINATOR);
-        pToken.safeTransfer(msg.sender, bonusRedeem);
-        
-        uint256 ethValue = pToken.balanceOf( address(this) ) * ethOwed / baseRedeem; 
-        covBase.updateShield(ethValue);
+        uint256 liqBonus = (baseRedeem * controller.bonus / DENOMINATOR);
+
+        tokensOwed = tokenValue.add(mintFees).add(liqBonus);
+        ethOwed = ethOwed.add(ethFees);
     }
 
     /**

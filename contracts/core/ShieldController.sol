@@ -14,25 +14,25 @@ contract ShieldController {
     // Amount that needs to be deposited to lock the contract.
     uint256 public depositAmount;
 
-    // Token to oracle for different types of contracts.
-    mapping(address => address) public oracles;
-    // Which shield corresponds to a given protocol token.
-    mapping
-    // One token may have multiple shields because of stacked risk differences.
-    mapping(address => address[]) public pTokenToShield;
-    // Which protocol token corresponds to a given Armor token.
-    mapping (address => address) arTokenToPToken;
-    // Which Armor token(s) corresponds to a given protocol token.
-    mapping (address => address[]) pTokenToArToken;
+    address[] public arShields;
 
     /**
      * @dev Create a new arShield from an already-created family.
     **/
-    function createShield(address _uToken, address _pool, bytes8 _family)
+    function createShield(
+        address _master,
+        address _arToken,
+        address _pToken,
+        address _uTokenLink,
+        address[] _covBases,
+        address _oracle
+    )
       external
       onlyGov
     {
-
+        // create Armor token
+        // create owned upgradeability proxy using master address
+        // initialize proxy with data above
     }
 
     /**

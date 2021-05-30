@@ -58,7 +58,6 @@ contract CoverageBase is ArmorClient, Ownable {
         
         // Determine how much the shield owes for the last period.
         uint256 owed = getShieldOwed(msg.sender);
-        require(msg.value >= owed, "Shield is not paying enough for the coverage provided.");
         
         totalEthValue = totalEthValue 
                         - uint256(stats.ethValue)
