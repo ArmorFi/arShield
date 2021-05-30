@@ -32,10 +32,16 @@ contract arShieldBase {
     // User => timestamp of when minting was requested.
     mapping (address => MintRequest) public mintRequests;
 
+    // The armorToken that this shield issues.
+    IERC20 public arToken;
     // Protocol token that we're providing protection for.
-    IyDAI public pToken;
+    IERC20 public pToken;
     // Underlying token of the pToken.
     IERC20 public uToken;
+    // Oracle to find uToken price.
+    Oracle public oracle;
+    // Controller of the arShields.
+    ShieldController public controller;
 
     // Time and amount a user would like to mint.
     struct MintRequest {
@@ -71,16 +77,13 @@ contract arShieldBase {
     function initialize(
         address _pToken, 
         address _uToken, 
-        address _uniPool, 
-        address _master, 
-        bool _crvToken
+        address _oracle
     )
       external
     {
-        IArmorMaster(_master).initialize();
-        pToken = IyDAI(_pToken);
+        pToken = IERC20(_pToken);
         uToken = IERC20(_uToken);
-        crvToken = _crvToken;
+        oracle = Oracle(_oracle);
     }
 
     /**
@@ -104,7 +107,7 @@ contract arShieldBase {
             mintRequests[_beneficiary] = MintRequest(block.timestamp, arAmount);
             emit MintRequest(_beneficiary, arAmount, block.timestamp);
             
-        } else if (block.timestamp.sub(mintDelay) > mintRequest.requestTime) {
+        } else if (block.timestamp.sub(controller.mintDelay) > mintRequest.requestTime) {
             
             delete mintRequests[_beneficiary];
             _mint(_beneficiary, mintRequest.requestAmount);
@@ -123,6 +126,28 @@ contract arShieldBase {
         arToken.transfer(msg.sender, pAmount);
         if (locked() && address(this).balance > 0) _sendClaim(_pAmount);
         emit Redemption(msg.sender, _arAmount, block.timestamp);
+    }
+
+    /**
+     * @dev Liquidate for payment for coverage by selling to people at oracle price.
+    **/
+    function liquidate()
+      external
+      override
+      payable
+      nonReentrant
+    {
+        // Find amount owed in Ether, find amount owed in underlying ('u'), redeem Yearn for that amount, send to liquidator, get Ether back.
+        uint256 ethOwed = getOwed();
+        require(msg.value >= ethOwed, "Must send correct Ether amount.");
+        
+        uint256 baseRedeem = oracle.getTokensOwed(ethOwed, pToken, uTokenLink);
+        // Add a bonus of 0.5%.
+        uint256 bonusRedeem = baseRedeem + (baseRedeem * bonus / DENOMINATOR);
+        pToken.safeTransfer(msg.sender, bonusRedeem);
+        
+        uint256 ethValue = pToken.balanceOf( address(this) ) * ethOwed / baseRedeem; 
+        covBase.updateShield(ethValue);
     }
 
     /**
@@ -229,18 +254,6 @@ contract arShieldBase {
         locked = false;
         lockTime = 0;
         emit Unlocked(block.timestamp);
-    }
-    
-    /**
-     * @dev Controller can change different delay periods on the contract.
-    **/
-    function changeDelays(
-        uint256 _mintDelay
-    )
-      external
-      onlyController
-    {
-        mintDelay = _mintDelay;
     }
 
 }

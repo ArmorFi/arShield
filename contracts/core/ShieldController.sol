@@ -1,60 +1,75 @@
 pragma solidity ^0.8.0;
+import './OwnedUpgradeabilityProxy.sol';
 
 contract ShieldController {
 
-    // Master contract for each family of arShields (Yearn, Uniswap, Balancer, etc.)
-    mapping(bytes8 => address) public matriarchs;
+    // Amount of time between when a mint request is made and finalized.
+    uint256 public mintDelay;
+    // Fee charged when minting and withdrawing.
+    uint256 public mintFee;
+    // Liquidation bonus for users who are liquidating funds.
+    uint256 public liqBonus;
+    // Lock bonus for depositors who correctly lock a contract.
+    uint256 public depositReward;
+    // Amount that needs to be deposited to lock the contract.
+    uint256 public depositAmount;
 
-    // Individual arShields grouped by family.
-    mapping(bytes8 => address[]) public shields;
+    // Token to oracle for different types of contracts.
+    mapping(address => address) public oracles;
+    // Which shield corresponds to a given protocol token.
+    mapping
+    // One token may have multiple shields because of stacked risk differences.
+    mapping(address => address[]) public pTokenToShield;
+    // Which protocol token corresponds to a given Armor token.
+    mapping (address => address) arTokenToPToken;
+    // Which Armor token(s) corresponds to a given protocol token.
+    mapping (address => address[]) pTokenToArToken;
 
     /**
      * @dev Create a new arShield from an already-created family.
     **/
     function createShield(address _uToken, address _pool, bytes8 _family)
       external
-      onlyOwner
+      onlyGov
     {
 
     }
 
     /**
-     * @dev Trigger a refill of arCore balance either by particular family, particular shield, or all.
+     * @dev Controller can change different delay periods on the contract.
     **/
-    function triggerRefills(address[] calldata _shield)
+    function changeDelay(
+        uint256 _mintDelay
+    )
       external
+      onlyGov
     {
-
-    }
-    
-    /**
-     * @dev Add a master for a family of arShields. Can also be used to change an existing.
-    **/
-    function addFamily(bytes8 _family, address _matriarch)
-      external
-      onlyOwner
-    {
-
+        mintDelay = _mintDelay;
     }
 
     /**
-     * @dev Lock either a specific shield or a family of shields.
+     * @dev Controller can change different delay periods on the contract.
     **/
-    function lockShields(address[] calldata _shield)
+    function changeFee(
+        uint256 _mintfee
+    )
       external
-      onlyOwner
+      onlyGov
     {
-
+        mintFee = _mintFee;
     }
 
     /**
-     * @dev Change some variables on a list of shields. It would be nice to be able to have these on master, but we don't want too many calls between contracts.
+     * @dev Edit the discount on Chainlink price that liquidators receive.
+     * @param _newBonus The new bonus amount that will be given to liquidators.
     **/
-    function changeDelay(address[] calldata _shields, uint256 _mintDelay, uint256 _lockTime)
+    function changeBonus(
+        uint256 _newBonus
+    )
       external
-      onlyOwner
+      onlyGov
     {
-
+        bonus = _newBonus;
     }
 
 }
