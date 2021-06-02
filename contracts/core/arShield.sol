@@ -3,11 +3,11 @@ import '../general/SafeMath.sol';
 import '../interfaces/IyDAI.sol';
 
 /**
- * @title Armor Shield Base
- * @dev arShield base provides the base functionality of arShield contracts. It does not provide liquidation strategies
+ * @title Armor Shield
+ * @dev arShield base provides the base functionality of arShield contracts.
  * @author Armor.Fi -- Robert M.C. Forster
 **/
-contract arShieldBase {
+contract arShield {
 
     using SafeMath for uint;
 
@@ -22,7 +22,11 @@ contract arShieldBase {
     // User who deposited to notify of a hack.
     address public depositor;
     // 0.25% paid for minting in order to pay for the first week of coverage--can be immediately liquidated.
-    uint256 public fees;
+    uint256[] public feesToLiq;
+    // Different amounts to charge as a fee for each protocol.
+    uint256[] public feePerBase;
+    // Total fee percent to take from withdrawals.
+    uint256 public totalFeePct;
     // User => timestamp of when minting was requested.
     mapping (address => MintRequest) public mintRequests;
 
@@ -37,6 +41,7 @@ contract arShieldBase {
     // Controller of the arShields.
     ShieldController public controller;
     // Coverage bases that we need to be paying.
+    address[] public covBases;
 
     // Time and amount a user would like to mint.
     struct MintRequest {
@@ -101,9 +106,14 @@ contract arShieldBase {
         
         if (mintRequest.requestTime == 0) {
             
-            uint256 fee = _pAmount.mul(controller.fee).div(DENOMINATOR);
-            fees = fees.add(fee);
-            uint256 arAmount = arValue( _pAmount.sub(fee) );
+            uint256 totalFee = 0; 
+            for (uint256 i = 0; i < feesToLiq.length; i++) {
+                uint256 fee = _pAmount.mul(feePerBase[i]).div(DENOMINATOR);
+                feesToLiq[i] = feesToLiq[i].add(fee);
+                totalFee += fee;
+            }
+
+            uint256 arAmount = arValue( _pAmount.sub(totalFee) );
 
             pToken.transferFrom(msg.sender, address(this), _pAmount);
             mintRequests[msg.sender] = MintRequest(block.timestamp, arAmount);
@@ -126,38 +136,46 @@ contract arShieldBase {
         uint256 pAmount = pValue(_arAmount);
         _burn(msg.sender, _arAmount);
 
-        uint256 fee = pAmount.mul(controller.fee).div(DENOMINATOR);
-        fees = fees.add(fee);
-        arToken.transfer( msg.sender, pAmount.sub(fee) );
+        uint256 totalFee = 0; 
+        for (uint256 i = 0; i < feesToLiq.length; i++) {
+            uint256 fee = _pAmount.mul(feePerBase[i]).div(DENOMINATOR);
+            feesToLiq[i] = feesToLiq[i].add(fee);
+            totalFee += fee;
+        }
 
-        if (locked() && address(this).balance > 0) _sendClaim(_pAmount);
+        arToken.transfer( msg.sender, pAmount.sub(totalFee) );
+        if (locked && address(this).balance > 0) _sendEther(_pAmount);
         emit Redemption(msg.sender, _arAmount, block.timestamp);
     }
 
     /**
      * @dev Liquidate for payment for coverage by selling to people at oracle price.
     **/
-    function liquidate(uint256 covIdx)
+    function liquidate(
+        uint256 covId
+    )
       external
       override
       payable
       nonReentrant
     {
-        (uint256 ethOwed, 
+        // Get full amounts for liquidation here.
+        (
+         uint256 ethOwed, 
          uint256 tokenValue, 
-         uint256 tokensOwed
-        ) = liqAmounts(covIdx);
+         uint256 tokensOwed,
+         uint256 tokenFees
+        ) = liqAmts(covId);
 
-        uint256 ethIn = msg.value;
-        uint256 tokensOut = ethIn
-                            .mul(tokensOwed)
-                            .div(ethOwed);
+        // determine eth value and amount of tokens to pay?
+        (
+         uint256 tokensOut,
+         uint256 feesPaid,
+         uint256 ethValue
+        ) = payAmts(msg.value);
 
-        uint256 ethValue = pToken.balanceOf( address(this) )
-                            .mul(ethOwed)
-                            .div(tokenValue); 
-
-        CovBase(covBases[covIdx]).updateShield(ethValue).value(ethIn);
+        CovBase(covBases[covId]).updateShield({value: ethIn})(ethValue);
+        feesToLiq[covId] -= feesPaid;
         pToken.safeTransfer(msg.sender, tokensOut);
     }
 
@@ -166,26 +184,52 @@ contract arShieldBase {
      * @return ethOwed Amount of Ether owed to coverage base.
      * @return tokensOwed Amount of tokens owed to liquidator for that Ether.
     **/
-    function liqAmounts(uint256 covIdx)
+    function liqAmts(uint256 covId)
       public
       view
     returns(
         uint256 ethOwed,
         uint256 tokenValue,
-        uint256 tokensOwed
+        uint256 tokensOwed,
+        uint256 tokenFees
     )
     {
         // Find amount owed in Ether, find amount owed in protocol tokens.
-        ethOwed = CovBase(covBases[covIdx]).getOwed( address(this) );
+        ethOwed = CovBase(covBases[covId]).getOwed( address(this) );
         tokenValue = oracle.getTokensOwed(ethOwed, pToken, uTokenLink);
 
+        tokenFees = feesToLiq[covId];
         // Find the Ether value of the mint fees we have.
-        uint256 ethFees = mintFees.mul(ethOwed).div(tokensOwed);
-        // Add a bonus of 0.5%.
-        uint256 liqBonus = (baseRedeem * controller.bonus / DENOMINATOR);
+        uint256 ethFees = ethOwed * tokenFees / tokenValue;
 
-        tokensOwed = tokenValue.add(mintFees).add(liqBonus);
+        tokensOwed = tokenValue.add(tokenFees);
+        // Add a bonus of 0.5%.
+        uint256 liqBonus = (tokensOwed * controller.bonus / DENOMINATOR);
+
+        tokensOwed = tokensOwed.add(liqBonus);
         ethOwed = ethOwed.add(ethFees);
+    }
+
+    function payAmts(
+        uint256 _ethIn
+    )
+      public
+      view
+    returns(
+        uint256 tokensOut,
+        uint256 feesPaid,
+        uint256 ethValue
+    )
+    {
+        tokensOut = ethIn
+                    .mul(tokensOwed)
+                    .div(ethOwed);
+        feesPaid = ethIn
+                    .mul(tokenFees)
+                    .div(ethOwed);
+        ethValue = pToken.balanceOf( address(this) )
+                    .mul(ethOwed)
+                    .div(tokenValue);
     }
 
     /**
@@ -261,7 +305,7 @@ contract arShieldBase {
     )
       internal
     {
-        uint256 ethAmount = _arAmount * BUFFER / totalSupply() * address(this).balance / BUFFER;
+        uint256 ethAmount = _arAmount * address(this).balance / totalSupply();
         msg.sender.transfer(ethAmount);
     }
     
@@ -272,7 +316,7 @@ contract arShieldBase {
         uint256 _payoutBlock
     )
       external
-      onlyController
+      onlyGov
     {
         // TODO: change to safe transfer
         depositor.transfer(depositReward);
@@ -287,11 +331,32 @@ contract arShieldBase {
     function unlock()
       external
       locked
-      onlyController
+      onlyGov
     {
         locked = false;
         lockTime = 0;
         emit Unlocked(block.timestamp);
+    }
+
+    /**
+     * @dev Change the fees taken for minting and redeeming.
+     * @param _newFees Array for each of the 
+    **/
+    function changeFees(
+        uint256[] calldata _newFees
+    )
+      external
+      onlyGov
+    {
+        require(_newFees.length == covBases.length, "Improper fees length.");
+        
+        uint256 total = 0;
+        for (uint256 i = 0; i < _newFees.length; i++) {
+            feePerBase[i] = _newFees[i];
+            total = total.add(_newFees[i]);
+        }
+
+        totalFeePct = total;
     }
 
 }

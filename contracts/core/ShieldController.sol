@@ -1,12 +1,11 @@
 pragma solidity ^0.8.0;
+import './IarShield.sol';
 import './OwnedUpgradeabilityProxy.sol';
 
 contract ShieldController {
 
     // Amount of time between when a mint request is made and finalized.
     uint256 public mintDelay;
-    // Fee charged when minting and withdrawing.
-    uint256 public mintFee;
     // Liquidation bonus for users who are liquidating funds.
     uint256 public liqBonus;
     // Lock bonus for depositors who correctly lock a contract.
@@ -20,19 +19,32 @@ contract ShieldController {
      * @dev Create a new arShield from an already-created family.
     **/
     function createShield(
-        address _master,
-        address _arToken,
+        address _masterCopy,
         address _pToken,
         address _uTokenLink,
         address[] _covBases,
-        address _oracle
+        address _oracle,
+        uint256[] calldata _fees
     )
       external
       onlyGov
     {
-        // create Armor token
-        // create owned upgradeability proxy using master address
-        // initialize proxy with data above
+        address token = new ArmorToken(_name, _symbol);
+        address proxy = new Proxy(_masterCopy);
+        
+        IarShield(proxy).initialize(
+            _pToken,
+            _uTokenLink,
+            _covBases,
+            _oracle,
+            _fees
+        );
+        
+        for(uint256 i = 0; i < covBases.length; i++) {
+            _covBases[i].addShield(proxy);
+        }
+
+        arShields.push(proxy);
     }
 
     /**
@@ -45,18 +57,6 @@ contract ShieldController {
       onlyGov
     {
         mintDelay = _mintDelay;
-    }
-
-    /**
-     * @dev Controller can change different delay periods on the contract.
-    **/
-    function changeFee(
-        uint256 _mintfee
-    )
-      external
-      onlyGov
-    {
-        mintFee = _mintFee;
     }
 
     /**

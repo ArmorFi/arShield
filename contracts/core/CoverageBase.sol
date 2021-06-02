@@ -25,9 +25,10 @@ contract CoverageBase is ArmorClient, Ownable {
     
     // Every time a shield updates it saves the full contracts cumulative cost, its Ether value, and 
     struct ShieldStats {
-        uint256 lastCumCost;
+        uint128 lastCumCost;
         uint128 ethValue;
         uint128 lastUpdate;
+        uint128 unpaid;
     }
     
     /**
@@ -58,13 +59,20 @@ contract CoverageBase is ArmorClient, Ownable {
         
         // Determine how much the shield owes for the last period.
         uint256 owed = getShieldOwed(msg.sender);
-        
+        uint256 unpaid = 0 ? owed <= msg.value : owed - msg.value;
+
         totalEthValue = totalEthValue 
                         - uint256(stats.ethValue)
                         + _newEthValue;
 
         checkpoint();
-        shieldStats[msg.sender] = ShieldStats( cumCost, uint128(_newEthValue), uint128(block.timestamp) );
+
+        shieldStats[msg.sender] = ShieldStats( 
+                                    uint128(cumCost), 
+                                    uint128(_newEthValue), 
+                                    uint128(block.timestamp), 
+                                    uint128(unpaid) 
+                                  );
     }
     
     /**
@@ -83,13 +91,14 @@ contract CoverageBase is ArmorClient, Ownable {
         ShieldStats memory stats = shieldStats[_shield];
         
         // difference between current cumulative and cumulative at last shield update
-        uint256 pastDiff = cumCost - stats.lastCumCost;
+        uint256 pastDiff = cumCost - uint256(stats.lastCumCost);
         uint256 currentDiff = costPerEth * ( block.timestamp - uint256(lastUpdate) );
         
         owed = uint256(stats.ethValue) 
-                * pastDiff 
+                * pastDiff
                 + uint256(stats.ethValue)
-                * currentDiff;
+                * currentDiff
+                + uint256(stats.unpaid);
     }
     
     /**

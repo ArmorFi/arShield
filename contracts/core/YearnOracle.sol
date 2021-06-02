@@ -82,7 +82,7 @@ contract YearnOracle {
         uint256 ethPerToken
     )
     {
-        (/*roundIf*/, int tokenPrice, /*startedAt*/, /*timestamp*/, /*answeredInRound*/) = AggregatorV3Interface(_uTokenLink).getThePrice();
+        (/*roundIf*/, int tokenPrice, /*startedAt*/, /*timestamp*/, /*answeredInRound*/) = AggregatorV3Interface(_uTokenLink).latestAnswer();
         ethPerToken = uint256(tokenPrice);
     }
     
