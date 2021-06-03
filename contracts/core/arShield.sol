@@ -27,6 +27,8 @@ contract arShield {
     uint256[] public feePerBase;
     // User => timestamp of when minting was requested.
     mapping (address => MintRequest) public mintRequests;
+    // Whether user has been paid for a specific payout block.
+    mapping (address => mapping (address => bool)) public paid;
 
     // The armorToken that this shield issues.
     IERC20 public arToken;
@@ -106,14 +108,8 @@ contract arShield {
         
         if (mintRequest.requestTime == 0) {
             
-            uint256 totalFee = 0; 
-            for (uint256 i = 0; i < feesToLiq.length; i++) {
-                uint256 fee = _pAmount.mul(feePerBase[i]).div(DENOMINATOR);
-                feesToLiq[i] = feesToLiq[i].add(fee);
-                totalFee += fee;
-            }
-
-            uint256 arAmount = arValue( _pAmount.sub(totalFee) );
+            uint256 fee = findFee(_pAmount);
+            uint256 arAmount = arValue( _pAmount.sub(fee) );
 
             pToken.transferFrom(msg.sender, address(this), _pAmount);
             mintRequests[msg.sender] = MintRequest(block.timestamp, arAmount);
@@ -148,17 +144,28 @@ contract arShield {
         uint256 pAmount = pValue(_arAmount);
         arToken.transferFrom(msg.sender, address(this), _arAmount);
         arToken.burn(_arAmount);
+        uint256 fee = findFee(pAmount);
+        arToken.transfer( msg.sender, pAmount.sub(fee) );
+        emit Redemption(msg.sender, _arAmount, block.timestamp);
+    }
 
-        uint256 totalFee = 0; 
+    /**
+     * @dev Find the fee for deposit and withdrawal.
+    **/
+    function findFee(
+        uint256 _pAmount
+    )
+      public
+      view
+    returns(
+        uint256 totalFee
+    )
+    {
         for (uint256 i = 0; i < feesToLiq.length; i++) {
             uint256 fee = _pAmount.mul(feePerBase[i]).div(DENOMINATOR);
             feesToLiq[i] = feesToLiq[i].add(fee);
             totalFee += fee;
         }
-
-        arToken.transfer( msg.sender, pAmount.sub(totalFee) );
-        if (locked && address(this).balance > 0) _sendEther(_pAmount);
-        emit Redemption(msg.sender, _arAmount, block.timestamp);
     }
 
     /**
@@ -246,17 +253,6 @@ contract arShield {
     }
 
     /**
-     * @dev Funds may be withdrawn to beneficiary if any are leftover after a hack.
-     * TODO: Add ability to withdraw tokens other than arToken
-    **/
-    function withdrawExcess()
-      external
-      notLocked
-    {
-        beneficiary.transfer( address(this).balance );
-    }
-
-    /**
      * @dev Anyone may call this to pause contract deposits for a couple days.
      *      They will get refunded + more when hack is confirmed.
     **/
@@ -270,6 +266,19 @@ contract arShield {
         locked = true;
         lockTime = block.timestamp;
         emit Locked(msg.sender, block.timestamp);
+    }
+
+    /**
+     * @dev Claim funds if you were holding tokens on the payout block.
+    **/
+    function claim()
+      external
+      locked
+    {
+        uint256 balance = arToken.balanceOf(msg.sender, payoutBlock);
+        require(balance > 0 && !paid[payoutBlock][msg.sender], "Sender did not have funds on payout block.");
+        paid[payoutBlock][msg.sender] = true;
+        msg.sender.transfer(payoutAmt * balance / 1 ether);
     }
 
     /**
@@ -290,7 +299,18 @@ contract arShield {
         uint256 bufferedAmount = totalSupply().div(bufferedP).mul(_pAmount);
         arAmount = bufferedAmount.div(1e18);
     }
-    
+
+    /**
+     * @dev Funds may be withdrawn to beneficiary if any are leftover after a hack.
+     * TODO: Add ability to withdraw tokens other than arToken
+    **/
+    function withdrawExcess()
+      external
+      notLocked
+    {
+        beneficiary.transfer( address(this).balance );
+    }
+
     /**
      * @dev Inverse of arValue (find yToken value of arToken amount).
      * @param _arAmount Amount of arTokens to find yToken value of.
@@ -308,18 +328,6 @@ contract arShield {
         uint256 bufferedP = pToken.balanceOf( address(this) ) * 1e18;
         uint256 bufferedAmount = bufferedP.div( totalSupply() ).mul(_arAmount);
         pAmount = bufferedAmount.div(1e18);
-    }
-
-    /**
-     * @dev Sends Ether if the contract is locked and Ether is in it.
-    **/
-    function _sendEther(
-        uint256 _arAmount
-    )
-      internal
-    {
-        uint256 ethAmount = _arAmount * address(this).balance / totalSupply();
-        msg.sender.transfer(ethAmount);
     }
     
     /**
@@ -350,6 +358,8 @@ contract arShield {
     {
         locked = false;
         lockTime = 0;
+        delete payoutBlock;
+        delete payoutAmt;
         emit Unlocked(block.timestamp);
     }
 
