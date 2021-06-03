@@ -25,8 +25,6 @@ contract arShield {
     uint256[] public feesToLiq;
     // Different amounts to charge as a fee for each protocol.
     uint256[] public feePerBase;
-    // Total fee percent to take from withdrawals.
-    uint256 public totalFeePct;
     // User => timestamp of when minting was requested.
     mapping (address => MintRequest) public mintRequests;
 
@@ -45,12 +43,14 @@ contract arShield {
 
     // Time and amount a user would like to mint.
     struct MintRequest {
-        uint48 requestTime;
-        uint208 requestAmount;
+        uint32 requestTime;
+        uint112 arAmount;
+        uint112 pAmount;
     }
 
     event MintRequest(address indexed user, uint256 amount, uint256 timestamp);
     event MintFinalized(address indexed user, uint256 amount, uint256 timestamp);
+    event MintCancelled(address indexed user, uint256 amount, uint256 timestamp);
     event Redemption(address indexed user, uint256 amount, uint256 timestamp);
     event Locked(address reporter, uint256 timestamp);
     event Unlocked(uint256 timestamp);
@@ -122,10 +122,22 @@ contract arShield {
         } else if (block.timestamp.sub(controller.mintDelay) > mintRequest.requestTime) {
             
             delete mintRequests[_beneficiary];
-            _mint(_beneficiary, mintRequest.requestAmount);
+            arToken.mint(_beneficiary, mintRequest.requestAmount);
             emit MintFinalized(_beneficiary, mintRequest.requestAmount, block.timestamp);
         
         }
+    }
+
+    /**
+     * @dev Cancel a mint call in case the user does not want to finalize. Also used if lock occurs before finalize.
+    **/
+    function cancelMint()
+      external
+    {
+        MintRequest memory request = mintRequests[msg.sender];
+        delete mintRequests[_beneficiary];
+        pToken.transfer(msg.sender, request.pAmount);
+        emit MintCancelled(msg.sender, request.pAmount, block.timestamp);
     }
 
     function redeem(
@@ -134,7 +146,8 @@ contract arShield {
       external
     {
         uint256 pAmount = pValue(_arAmount);
-        _burn(msg.sender, _arAmount);
+        arToken.transferFrom(msg.sender, address(this), _arAmount);
+        arToken.burn(_arAmount);
 
         uint256 totalFee = 0; 
         for (uint256 i = 0; i < feesToLiq.length; i++) {
@@ -313,7 +326,8 @@ contract arShield {
      * @dev Used by controller to confirm that a hack happened, which then locks the contract in anticipation of claims.
     **/
     function confirmHack(
-        uint256 _payoutBlock
+        uint256 _payoutBlock,
+        uint256 _payoutAmt
     )
       external
       onlyGov
@@ -322,6 +336,7 @@ contract arShield {
         depositor.transfer(depositReward);
         delete depositor;
         payoutBlock = _payoutBlock;
+        payoutAmt = _payoutAmt;
         emit HackConfirmed(_payoutBlock, block.timestamp);
     }
     
@@ -348,15 +363,8 @@ contract arShield {
       external
       onlyGov
     {
-        require(_newFees.length == covBases.length, "Improper fees length.");
-        
-        uint256 total = 0;
-        for (uint256 i = 0; i < _newFees.length; i++) {
-            feePerBase[i] = _newFees[i];
-            total = total.add(_newFees[i]);
-        }
-
-        totalFeePct = total;
+        require(_newFees.length == feePerBase.length, "Improper fees length.");
+        for (uint256 i = 0; i < _newFees.length; i++) feePerBase[i] = _newFees[i];
     }
 
 }
