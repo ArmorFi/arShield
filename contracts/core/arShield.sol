@@ -98,42 +98,18 @@ contract arShield {
      * @param _beneficiary User who a finalized mint may be sent to
     **/
     function mint(
-        uint256 _pAmount, 
-        address _beneficiary
+        uint256 _pAmount
     )
       external
       notLocked
-    {
-        MintRequest memory mintRequest = mintRequests[_beneficiary];
-        
-        if (mintRequest.requestTime == 0) {
-            
-            uint256 fee = findFee(_pAmount);
-            uint256 arAmount = arValue( _pAmount.sub(fee) );
+    {    
+        uint256 fee = findFee(_pAmount);
+        uint256 arAmount = arValue( _pAmount.sub(fee) );
 
-            pToken.transferFrom(msg.sender, address(this), _pAmount);
-            mintRequests[msg.sender] = MintRequest(block.timestamp, arAmount);
-            emit MintRequest(msg.sender, arAmount, block.timestamp);
-            
-        } else if (block.timestamp.sub(controller.mintDelay) > mintRequest.requestTime) {
-            
-            delete mintRequests[_beneficiary];
-            arToken.mint(_beneficiary, mintRequest.requestAmount);
-            emit MintFinalized(_beneficiary, mintRequest.requestAmount, block.timestamp);
-        
-        }
-    }
+        pToken.transferFrom(msg.sender, address(this), _pAmount);
+        arToken.mint(msg.sender, arAmount);
 
-    /**
-     * @dev Cancel a mint call in case the user does not want to finalize. Also used if lock occurs before finalize.
-    **/
-    function cancelMint()
-      external
-    {
-        MintRequest memory request = mintRequests[msg.sender];
-        delete mintRequests[_beneficiary];
-        pToken.transfer(msg.sender, request.pAmount);
-        emit MintCancelled(msg.sender, request.pAmount, block.timestamp);
+        emit MintFinalized(msg.sender, arAmount, block.timestamp);
     }
 
     function redeem(
@@ -145,7 +121,7 @@ contract arShield {
         arToken.transferFrom(msg.sender, address(this), _arAmount);
         arToken.burn(_arAmount);
         uint256 fee = findFee(pAmount);
-        arToken.transfer( msg.sender, pAmount.sub(fee) );
+        pToken.transfer( msg.sender, pAmount.sub(fee) );
         emit Redemption(msg.sender, _arAmount, block.timestamp);
     }
 
