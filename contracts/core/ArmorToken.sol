@@ -1,5 +1,5 @@
-pragma solidity ^0.6.0;
-
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.4;
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 /**
@@ -9,7 +9,7 @@ contract ArmorToken is ERC20 {
 
     address public arShield;
 
-    constructor(address _arShield) ERC20("Armor yDAI", "armorYDai") public {
+    constructor(address _arShield, string memory _name, string memory _symbol) ERC20(_name, _symbol) {
         arShield = _arShield;
     }
     

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: (c) Armor.Fi DAO, 2021
 
-pragma solidity ^0.6.6;
+pragma solidity 0.8.4;
 
 interface IPlanManager {
   // Mapping = protocol => cover amount

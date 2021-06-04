@@ -1,11 +1,11 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity 0.8.4;
 
-pragma solidity ^0.6.6;
+interface IArmorToken {
 
-/**
- * @dev Interface of the ERC20 standard as defined in the EIP.
- */
-interface IERC20 {
+    function mint(address to, uint256 amount) external returns (bool);
+    function burn(uint256 amount) external returns (bool);
+
     /**
      * @dev Returns the amount of tokens in existence.
      */
@@ -15,6 +15,9 @@ interface IERC20 {
      * @dev Returns the amount of tokens owned by `account`.
      */
     function balanceOf(address account) external view returns (uint256);
+    
+    // Putting in for now to replicate the compound-like token function where I can find balance at a certain block.
+    function balanceOf(address account, uint256 blockNo) external view returns (uint256);
 
     /**
      * @dev Moves `amount` tokens from the caller's account to `recipient`.
@@ -74,4 +77,5 @@ interface IERC20 {
      * a call to {approve}. `value` is the new allowance.
      */
     event Approval(address indexed owner, address indexed spender, uint256 value);
+
 }

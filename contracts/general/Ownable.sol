@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT
-
-pragma solidity ^0.6.6;
+pragma solidity ^0.8.4;
 
 /**
  * @title Ownable
@@ -21,7 +20,7 @@ contract Ownable {
      */
     function initializeOwnable() internal {
         require(_owner == address(0), "already initialized");
-        _owner = msg.sender;
+        _owner = payable( msg.sender );
         emit OwnershipTransferred(address(0), msg.sender);
     }
 
@@ -60,7 +59,7 @@ contract Ownable {
     function receiveOwnership() public {
         require(msg.sender == _pendingOwner, "only pending owner can call this function");
         _transferOwnership(_pendingOwner);
-        _pendingOwner = address(0);
+        _pendingOwner = payable( address(0) );
     }
 
     /**

@@ -1,62 +1,59 @@
-pragma solidity 0.6.12;
-import '../general/SafeMath.sol';
-import '../interfaces/IyDAI.sol';
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity 0.8.4;
+
+import '../general/Governable.sol';
+import '../interfaces/IOracle.sol';
+import '../interfaces/ICovBase.sol';
+import '../interfaces/IController.sol';
+import '../interfaces/IArmorToken.sol';
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
 
 /**
  * @title Armor Shield
  * @dev arShield base provides the base functionality of arShield contracts.
  * @author Armor.Fi -- Robert M.C. Forster
 **/
-contract arShield {
+contract arShield is Governable {
 
-    using SafeMath for uint;
-
-    // Buffer amount for division.
-    uint256 constant private BUFFER = 1e18;
+    // Denominator for % fractions.
+    uint256 constant DENOMINATOR = 1000;
     // Whether or not the contract is locked.
     bool public locked;
     // Beneficiary may withdraw any extra Ether after a claims period.
     address payable public beneficiary;
     // Block at which users must be holding tokens to receive a payout.
     uint256 public payoutBlock;
+    // Amount to payout in Ether per token for the most recent hack.
+    uint256 public payoutAmt;
     // User who deposited to notify of a hack.
     address public depositor;
     // 0.25% paid for minting in order to pay for the first week of coverage--can be immediately liquidated.
     uint256[] public feesToLiq;
     // Different amounts to charge as a fee for each protocol.
     uint256[] public feePerBase;
-    // User => timestamp of when minting was requested.
-    mapping (address => MintRequest) public mintRequests;
+    // Whether user has been paid for a specific payout block.
+    mapping (uint256 => mapping (address => uint256)) public paid;
 
+    address public uTokenLink;
     // The armorToken that this shield issues.
-    IERC20 public arToken;
+    IArmorToken public arToken;
     // Protocol token that we're providing protection for.
     IERC20 public pToken;
-    // Underlying token of the pToken.
-    IERC20 public uToken;
     // Oracle to find uToken price.
-    Oracle public oracle;
-    // Controller of the arShields.
-    ShieldController public controller;
+    IOracle public oracle;
+    // Used for universal variables (all shields) such as bonus for liquidation.
+    IController public controller;
     // Coverage bases that we need to be paying.
-    address[] public covBases;
+    ICovBase[] public covBases;
 
-    // Time and amount a user would like to mint.
-    struct MintRequest {
-        uint32 requestTime;
-        uint112 arAmount;
-        uint112 pAmount;
-    }
-
-    event MintRequest(address indexed user, uint256 amount, uint256 timestamp);
-    event MintFinalized(address indexed user, uint256 amount, uint256 timestamp);
-    event MintCancelled(address indexed user, uint256 amount, uint256 timestamp);
+    event Mint(address indexed user, uint256 amount, uint256 timestamp);
     event Redemption(address indexed user, uint256 amount, uint256 timestamp);
     event Locked(address reporter, uint256 timestamp);
     event Unlocked(uint256 timestamp);
     event HackConfirmed(uint256 payoutBlock, uint256 timestamp);
 
-    modifier locked {
+    modifier isLocked {
         require(locked, "You may not do this while the contract is unlocked.");
         _;
     }
@@ -67,77 +64,48 @@ contract arShield {
         _;
     }
     
-    receive() external payable;
+    receive() external payable {}
     
     /**
      * @dev Initialize the contract
-     * @param _master Address of the Armor master contract.
      * @param _pToken The protocol token we're protecting.
     **/
     function initialize(
+        address _gov,
         address _arToken,
         address _pToken, 
-        address _uToken, 
+        address _uTokenLink, 
         address _oracle,
-        address[] _covBases
+        address[] calldata _covBases
     )
       external
     {
+        require(_arToken == address(0), "Contract already initialized.");
+        _transferOwnership( payable(_gov) );
+        arToken = IArmorToken(_arToken);
         pToken = IERC20(_pToken);
-        uToken = IERC20(_uToken);
-        oracle = Oracle(_oracle);
-        controller = Controller(msg.sender);
+        uTokenLink = _uTokenLink;
+        oracle = IOracle(_oracle);
+        controller = IController(msg.sender);
+        for(uint256 i = 0; i < _covBases.length; i++) covBases[i] = ICovBase(_covBases[i]);
     }
 
     /**
      * @dev User deposits pToken, is returned arToken. Amount returned is judged based off amount in contract.
      *      Amount returned will likely be more than deposited because pTokens will be removed to pay for cover.
      * @param _pAmount Amount of pTokens to deposit to the contract.
-     * @param _beneficiary User who a finalized mint may be sent to
     **/
     function mint(
-        uint256 _pAmount, 
-        address _beneficiary
+        uint256 _pAmount
     )
       external
       notLocked
-    {
-        MintRequest memory mintRequest = mintRequests[_beneficiary];
-        
-        if (mintRequest.requestTime == 0) {
-            
-            uint256 totalFee = 0; 
-            for (uint256 i = 0; i < feesToLiq.length; i++) {
-                uint256 fee = _pAmount.mul(feePerBase[i]).div(DENOMINATOR);
-                feesToLiq[i] = feesToLiq[i].add(fee);
-                totalFee += fee;
-            }
-
-            uint256 arAmount = arValue( _pAmount.sub(totalFee) );
-
-            pToken.transferFrom(msg.sender, address(this), _pAmount);
-            mintRequests[msg.sender] = MintRequest(block.timestamp, arAmount);
-            emit MintRequest(msg.sender, arAmount, block.timestamp);
-            
-        } else if (block.timestamp.sub(controller.mintDelay) > mintRequest.requestTime) {
-            
-            delete mintRequests[_beneficiary];
-            arToken.mint(_beneficiary, mintRequest.requestAmount);
-            emit MintFinalized(_beneficiary, mintRequest.requestAmount, block.timestamp);
-        
-        }
-    }
-
-    /**
-     * @dev Cancel a mint call in case the user does not want to finalize. Also used if lock occurs before finalize.
-    **/
-    function cancelMint()
-      external
-    {
-        MintRequest memory request = mintRequests[msg.sender];
-        delete mintRequests[_beneficiary];
-        pToken.transfer(msg.sender, request.pAmount);
-        emit MintCancelled(msg.sender, request.pAmount, block.timestamp);
+    {    
+        uint256 fee = findFee(_pAmount);
+        uint256 arAmount = arValue(_pAmount - fee);
+        pToken.transferFrom(msg.sender, address(this), _pAmount);
+        arToken.mint(msg.sender, arAmount);
+        emit Mint(msg.sender, arAmount, block.timestamp);
     }
 
     function redeem(
@@ -148,17 +116,31 @@ contract arShield {
         uint256 pAmount = pValue(_arAmount);
         arToken.transferFrom(msg.sender, address(this), _arAmount);
         arToken.burn(_arAmount);
+        
+        uint256 fee = findFee(pAmount);
+        pToken.transfer(msg.sender, pAmount - fee);
+        
+        emit Redemption(msg.sender, _arAmount, block.timestamp);
+    }
 
-        uint256 totalFee = 0; 
+    /**
+     * @dev Find the fee for deposit and withdrawal.
+    **/
+    function findFee(
+        uint256 _pAmount
+    )
+      internal
+    returns(
+        uint256 totalFee
+    )
+    {
         for (uint256 i = 0; i < feesToLiq.length; i++) {
-            uint256 fee = _pAmount.mul(feePerBase[i]).div(DENOMINATOR);
-            feesToLiq[i] = feesToLiq[i].add(fee);
+            uint256 fee = _pAmount
+                          * feePerBase[i]
+                          / DENOMINATOR;
+            feesToLiq[i] += fee;
             totalFee += fee;
         }
-
-        arToken.transfer( msg.sender, pAmount.sub(totalFee) );
-        if (locked && address(this).balance > 0) _sendEther(_pAmount);
-        emit Redemption(msg.sender, _arAmount, block.timestamp);
     }
 
     /**
@@ -168,9 +150,7 @@ contract arShield {
         uint256 covId
     )
       external
-      override
       payable
-      nonReentrant
     {
         // Get full amounts for liquidation here.
         (
@@ -185,17 +165,25 @@ contract arShield {
          uint256 tokensOut,
          uint256 feesPaid,
          uint256 ethValue
-        ) = payAmts(msg.value);
+        ) = payAmts(
+            msg.value,
+            ethOwed,
+            tokenValue,
+            tokensOwed,
+            tokenFees
+        );
 
-        CovBase(covBases[covId]).updateShield({value: ethIn})(ethValue);
+        covBases[covId].updateShield{value: msg.value}(ethValue);
         feesToLiq[covId] -= feesPaid;
-        pToken.safeTransfer(msg.sender, tokensOut);
+        pToken.transfer(msg.sender, tokensOut);
     }
 
     /**
      * @dev Amounts owed to be liquidated.
      * @return ethOwed Amount of Ether owed to coverage base.
+     * @return tokenValue Amount of tokens owed to liquidator for that Ether.
      * @return tokensOwed Amount of tokens owed to liquidator for that Ether.
+     * @return tokenFees Amount of tokens owed to liquidator for that Ether.
     **/
     function liqAmts(uint256 covId)
       public
@@ -208,23 +196,31 @@ contract arShield {
     )
     {
         // Find amount owed in Ether, find amount owed in protocol tokens.
-        ethOwed = CovBase(covBases[covId]).getOwed( address(this) );
-        tokenValue = oracle.getTokensOwed(ethOwed, pToken, uTokenLink);
+        ethOwed = covBases[covId].getOwed( address(this) );
+        tokenValue = oracle.getTokensOwed(ethOwed, address(pToken), uTokenLink);
 
         tokenFees = feesToLiq[covId];
         // Find the Ether value of the mint fees we have.
-        uint256 ethFees = ethOwed * tokenFees / tokenValue;
+        uint256 ethFees = ethOwed 
+                          * tokenFees 
+                          / tokenValue;
 
-        tokensOwed = tokenValue.add(tokenFees);
+        tokensOwed = tokenValue + tokenFees;
         // Add a bonus of 0.5%.
-        uint256 liqBonus = (tokensOwed * controller.bonus / DENOMINATOR);
+        uint256 liqBonus = tokensOwed 
+                           * controller.bonus()
+                           / DENOMINATOR;
 
-        tokensOwed = tokensOwed.add(liqBonus);
-        ethOwed = ethOwed.add(ethFees);
+        tokensOwed += liqBonus;
+        ethOwed += ethFees;
     }
 
     function payAmts(
-        uint256 _ethIn
+        uint256 _ethIn,
+        uint256 _ethOwed,
+        uint256 _tokenValue,
+        uint256 _tokensOwed,
+        uint256 _tokenFees
     )
       public
       view
@@ -234,63 +230,17 @@ contract arShield {
         uint256 ethValue
     )
     {
-        tokensOut = ethIn
-                    .mul(tokensOwed)
-                    .div(ethOwed);
-        feesPaid = ethIn
-                    .mul(tokenFees)
-                    .div(ethOwed);
+        tokensOut = _ethIn
+                    * _tokensOwed
+                    / _ethOwed;
+        feesPaid = _ethIn
+                   * _tokenFees
+                   / _ethOwed;
         ethValue = pToken.balanceOf( address(this) )
-                    .mul(ethOwed)
-                    .div(tokenValue);
+                   * _ethOwed
+                   / _tokenValue;
     }
 
-    /**
-     * @dev Funds may be withdrawn to beneficiary if any are leftover after a hack.
-     * TODO: Add ability to withdraw tokens other than arToken
-    **/
-    function withdrawExcess()
-      external
-      notLocked
-    {
-        beneficiary.transfer( address(this).balance );
-    }
-
-    /**
-     * @dev Anyone may call this to pause contract deposits for a couple days.
-     *      They will get refunded + more when hack is confirmed.
-    **/
-    function notifyHack()
-      external
-      payable
-      notLocked
-    {
-        require(msg.value == depositAmount, "You must pay the deposit amount to notify a hack.");
-        depositor = msg.sender;
-        locked = true;
-        lockTime = block.timestamp;
-        emit Locked(msg.sender, block.timestamp);
-    }
-
-    /**
-     * @dev Find the arToken value of a pToken amount.
-     * @param _pAmount Amount of yTokens to find arToken value of.
-     * @return arAmount Amount of arToken the input pTokens are worth.
-    **/
-    function arValue(
-        uint256 _pAmount
-    )
-      public
-      view
-    returns (
-        uint256 arAmount
-    )
-    {
-        uint256 bufferedP = pToken.balanceOf( address(this) ).mul(1e18);
-        uint256 bufferedAmount = totalSupply().div(bufferedP).mul(_pAmount);
-        arAmount = bufferedAmount.div(1e18);
-    }
-    
     /**
      * @dev Inverse of arValue (find yToken value of arToken amount).
      * @param _arAmount Amount of arTokens to find yToken value of.
@@ -305,21 +255,74 @@ contract arShield {
         uint256 pAmount
     )
     {
-        uint256 bufferedP = pToken.balanceOf( address(this) ) * 1e18;
-        uint256 bufferedAmount = bufferedP.div( totalSupply() ).mul(_arAmount);
-        pAmount = bufferedAmount.div(1e18);
+        pAmount = pToken.balanceOf( address(this) )
+                  * 1 ether // just a buffer amount here.
+                  * _arAmount
+                  / arToken.totalSupply()
+                  / 1 ether;
+    }
+    
+    /**
+     * @dev Find the arToken value of a pToken amount.
+     * @param _pAmount Amount of yTokens to find arToken value of.
+     * @return arAmount Amount of arToken the input pTokens are worth.
+    **/
+    function arValue(
+        uint256 _pAmount
+    )
+      public
+      view
+    returns (
+        uint256 arAmount
+    )
+    {
+        arAmount = arToken.totalSupply() 
+                   * _pAmount 
+                   / pToken.balanceOf( address(this) )
+                   / 1 ether;
     }
 
     /**
-     * @dev Sends Ether if the contract is locked and Ether is in it.
+     * @dev Claim funds if you were holding tokens on the payout block.
     **/
-    function _sendEther(
-        uint256 _arAmount
-    )
-      internal
+    function claim()
+      external
+      isLocked
     {
-        uint256 ethAmount = _arAmount * address(this).balance / totalSupply();
-        msg.sender.transfer(ethAmount);
+        uint256 balance = arToken.balanceOf(msg.sender, payoutBlock);
+        uint256 amount = (payoutAmt 
+                         * balance 
+                         / 1 ether) 
+                         - paid[payoutBlock][msg.sender];
+        require(balance > 0 && amount > 0, "Sender did not have funds on payout block.");
+        paid[payoutBlock][msg.sender] += amount;
+        payable(msg.sender).transfer(amount);
+    }
+
+    /**
+     * @dev Funds may be withdrawn to beneficiary if any are leftover after a hack.
+     * TODO: Add ability to withdraw tokens other than arToken
+    **/
+    function withdrawExcess()
+      external
+      notLocked
+    {
+        beneficiary.transfer( address(this).balance );
+    }
+    
+    /**
+     * @dev Anyone may call this to pause contract deposits for a couple days.
+     *      They will get refunded + more when hack is confirmed.
+    **/
+    function notifyHack()
+      external
+      payable
+      notLocked
+    {
+        require(msg.value == controller.depositAmt(), "You must pay the deposit amount to notify a hack.");
+        depositor = msg.sender;
+        locked = true;
+        emit Locked(msg.sender, block.timestamp);
     }
     
     /**
@@ -333,7 +336,7 @@ contract arShield {
       onlyGov
     {
         // TODO: change to safe transfer
-        depositor.transfer(depositReward);
+        payable(depositor).transfer( controller.depositAmt() );
         delete depositor;
         payoutBlock = _payoutBlock;
         payoutAmt = _payoutAmt;
@@ -341,15 +344,39 @@ contract arShield {
     }
     
     /**
+     * @dev Block a payout if an address minted tokens after a hack occurred.
+     *      There are ways people can mess with this to make it annoying to ban people,
+     *      but ideally the presence of this function alone will stop malicious minting.
+     * 
+     *      Although it's not a likely scenario, the reason we put amounts in here
+     *      is to avoid a bad actor sending a bit to a legitimate holder and having their
+     *      full balance banned from receiving a payout.
+     * @param _users List of users to ban from receiving payout.
+     * @param _amounts Bad amounts (in Ether) that the user should not be paid.
+     * @param _payoutBlock The block at which the hack occurred.
+    **/
+    function banPayout(
+        address[] calldata _users,
+        uint256[] calldata _amounts,
+        uint256 _payoutBlock
+    )
+      external
+      onlyGov
+    {
+        for(uint256 i = 0; i < _users.length; i++) paid[_payoutBlock][_users[i]] += _amounts[i];
+    }
+    
+    /**
      * @dev Used by controller to confirm that a hack happened, which then locks the contract in anticipation of claims.
     **/
     function unlock()
       external
-      locked
+      isLocked
       onlyGov
     {
         locked = false;
-        lockTime = 0;
+        delete payoutBlock;
+        delete payoutAmt;
         emit Unlocked(block.timestamp);
     }
 

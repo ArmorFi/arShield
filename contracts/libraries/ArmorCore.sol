@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: (c) Armor.Fi DAO, 2021
-
-pragma solidity ^0.6.12;
+pragma solidity 0.8.4;
 
 import "../libraries/SafeMath.sol";
 import "../interfaces/IArmorMaster.sol";

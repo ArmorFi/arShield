@@ -1,6 +1,8 @@
-pragma solidity 0.6.12;
-import '../client/ArmorClient.sol';
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity 0.8.4;
+
 import '../general/Ownable.sol';
+import '../client/ArmorClient.sol';
 
 contract CoverageBase is ArmorClient, Ownable {
     
@@ -59,7 +61,7 @@ contract CoverageBase is ArmorClient, Ownable {
         
         // Determine how much the shield owes for the last period.
         uint256 owed = getShieldOwed(msg.sender);
-        uint256 unpaid = 0 ? owed <= msg.value : owed - msg.value;
+        uint256 unpaid = owed <= msg.value ? 0 : owed - msg.value;
 
         totalEthValue = totalEthValue 
                         - uint256(stats.ethValue)
@@ -151,7 +153,7 @@ contract CoverageBase is ArmorClient, Ownable {
       onlyOwner
     {
         // If active, set timestamp of last update to now, else delete.
-        if (_active) shieldStats[_shield] = ShieldStats( cumCost, 0, uint128(block.timestamp) );
+        if (_active) shieldStats[_shield] = ShieldStats( uint128(cumCost), 0, uint128(block.timestamp), 0 );
         else delete shieldStats[_shield]; 
     }
     

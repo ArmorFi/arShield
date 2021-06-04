@@ -1,10 +1,14 @@
-pragma solidity 0.6.12;
-import './IYearn.sol';
-import './AggregatorV3Interface';
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity 0.8.4;
+
+import '../interfaces/IYearn.sol';
+import '../interfaces/AggregatorV3Interface.sol';
+
 
 /**
  * @dev Uses Chainlink to find the price of underlying Yearn assets,
  *      then determines amount of yTokens to pay for Ether needed by shield.
+ * @author Armor.Fi -- Robert M.C. Forster
 **/
 contract YearnOracle {
 
@@ -25,7 +29,7 @@ contract YearnOracle {
         uint256 yOwed
     )
     {   
-        uint256 uOwed = ethToU(ethOwed, _uTokenLink);
+        uint256 uOwed = ethToU(_ethOwed, _uTokenLink);
         yOwed = uToY(_yToken, uOwed);
     }
     
@@ -78,11 +82,12 @@ contract YearnOracle {
         address _uTokenLink
     )
       internal
+      view
     returns (
         uint256 ethPerToken
     )
     {
-        (/*roundIf*/, int tokenPrice, /*startedAt*/, /*timestamp*/, /*answeredInRound*/) = AggregatorV3Interface(_uTokenLink).latestAnswer();
+        (/*roundIf*/, int tokenPrice, /*startedAt*/, /*timestamp*/, /*answeredInRound*/) = AggregatorV3Interface(_uTokenLink).latestRoundData();
         ethPerToken = uint256(tokenPrice);
     }
     

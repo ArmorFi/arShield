@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: (c) Armor.Fi DAO, 2021
-
-pragma solidity 0.6.12;
-
+pragma solidity 0.8.4;
 import '../interfaces/IArmorClient.sol';
 import '../libraries/ArmorCore.sol';
 
@@ -13,7 +11,7 @@ contract ArmorClient {
     // Address that has permission to submit proof-of-loss. Armor will assign NFTs for this address to submit proof-of-loss for.
     address public armorController;
 
-    constructor() internal {
+    constructor() {
         armorController = msg.sender;
     }
 
