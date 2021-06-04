@@ -1,4 +1,5 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: MIT
+
 pragma solidity 0.8.4;
 
 import './ArmorToken.sol';
@@ -16,6 +17,11 @@ contract ShieldController is Governable {
     uint256 public depositAmt;
     // List of all arShields
     address[] public arShields;
+
+    constructor()
+    {
+        initializeOwnable();
+    }
 
     /**
      * @dev Create a new arShield from an already-created family.
@@ -37,7 +43,6 @@ contract ShieldController is Governable {
         address token = address( new ArmorToken(proxy, _name, _symbol) );
         
         IarShield(proxy).initialize(
-            msg.sender,
             token,
             _pToken,
             _uTokenLink,
@@ -46,9 +51,27 @@ contract ShieldController is Governable {
             _fees
         );
         
-        for(uint256 i = 0; i < _covBases.length; i++) ICovBase(_covBases[i]).addShield(proxy);
+        for(uint256 i = 0; i < _covBases.length; i++) ICovBase(_covBases[i]).editShield(proxy, true);
 
         arShields.push(proxy);
+        OwnedUpgradeabilityProxy( payable(proxy) ).transferProxyOwnership(msg.sender);
+    }
+
+    /**
+     * @dev Delete a shield. We use both shield address and index for safety.
+     * @param _shield Address of the shield to delete from array.
+     * @param _idx Index of the shield in the arShields array.
+    **/
+    function deleteShield(
+        address _shield,
+        uint256 _idx
+    )
+      external
+      onlyGov
+    {
+        if (arShields[_idx] == _shield) delete arShields[_idx];
+        arShields[_idx] = arShields[arShields.length - 1];
+        arShields.pop();
     }
 
     /**

@@ -1,10 +1,12 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: MIT
+
 pragma solidity 0.8.4;
 
-import '../general/Ownable.sol';
 import '../client/ArmorClient.sol';
+import '../interfaces/IController.sol';
 
-contract CoverageBase is ArmorClient, Ownable {
+
+contract CoverageBase is ArmorClient {
     
     // Denominator for coverage percent.
     uint256 public constant DENOMINATOR = 1000;
@@ -24,6 +26,8 @@ contract CoverageBase is ArmorClient, Ownable {
     uint256 public totalEthValue;
     // Value in Ether and last updates of each shield vault.
     mapping (address => ShieldStats) public shieldStats;
+    // Controller holds governance contract.
+    IController public controller;
     
     // Every time a shield updates it saves the full contracts cumulative cost, its Ether value, and 
     struct ShieldStats {
@@ -31,6 +35,24 @@ contract CoverageBase is ArmorClient, Ownable {
         uint128 ethValue;
         uint128 lastUpdate;
         uint128 unpaid;
+    }
+    
+    // Only let the governance address or the ShieldController edit these functions.
+    modifier onlyGov 
+    {
+        require(msg.sender == controller.governor() || msg.sender == address(controller), "Sender is not governor.");
+        _;
+    }
+    
+    /**
+     * @dev Just used to set the controller for the coverage base.
+     * @param _controller ShieldController proxy address.
+    **/
+    constructor(
+        address _controller
+    )
+    {
+        controller = IController(_controller);
     }
     
     /**
@@ -150,7 +172,7 @@ contract CoverageBase is ArmorClient, Ownable {
         bool _active
     )
       external
-      onlyOwner
+      onlyGov
     {
         // If active, set timestamp of last update to now, else delete.
         if (_active) shieldStats[_shield] = ShieldStats( uint128(cumCost), 0, uint128(block.timestamp), 0 );
@@ -162,7 +184,7 @@ contract CoverageBase is ArmorClient, Ownable {
     **/
     function withdraw(address payable _beneficiary, uint256 _amount)
       external
-      onlyOwner
+      onlyGov
     {
         ArmorCore.withdraw(_amount);
         _beneficiary.transfer(_amount);
@@ -173,7 +195,7 @@ contract CoverageBase is ArmorClient, Ownable {
     **/
     function cancelCoverage()
       external
-      onlyOwner
+      onlyGov
     {
         ArmorCore.cancelPlan();
     }
@@ -188,7 +210,7 @@ contract CoverageBase is ArmorClient, Ownable {
         uint256 _amount
     )
       external
-      onlyOwner
+      onlyGov
     {
         ArmorCore.claim(protocol, _hackTime, _amount);
     }
@@ -203,7 +225,7 @@ contract CoverageBase is ArmorClient, Ownable {
         uint256 _amount
     )
       external
-      onlyOwner
+      onlyGov
     {
         require(shieldStats[_shield].lastUpdate > 0, "Shield is not authorized to use this contract.");
         _shield.transfer(_amount);
@@ -217,7 +239,7 @@ contract CoverageBase is ArmorClient, Ownable {
         uint256 _newPct
     )
       external
-      onlyOwner
+      onlyGov
     {
         require(_newPct <= 1000, "Coverage percent may not be greater than 100%.");
         coverPct = _newPct;    

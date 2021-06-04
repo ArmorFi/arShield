@@ -1,8 +1,13 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: MIT
+
 pragma solidity 0.8.4;
 
 interface IArmorToken {
 
+    function name() external view returns (string memory);
+    function symbol() external view returns (string memory);
+    function decimals() external view returns (uint8);
+    
     function mint(address to, uint256 amount) external returns (bool);
     function burn(uint256 amount) external returns (bool);
 

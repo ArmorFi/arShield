@@ -1,7 +1,7 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: MIT
+
 pragma solidity 0.8.4;
 
-import '../general/Governable.sol';
 import '../interfaces/IOracle.sol';
 import '../interfaces/ICovBase.sol';
 import '../interfaces/IController.sol';
@@ -14,7 +14,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
  * @dev arShield base provides the base functionality of arShield contracts.
  * @author Armor.Fi -- Robert M.C. Forster
 **/
-contract arShield is Governable {
+contract arShield {
 
     // Denominator for % fractions.
     uint256 constant DENOMINATOR = 1000;
@@ -53,13 +53,21 @@ contract arShield is Governable {
     event Unlocked(uint256 timestamp);
     event HackConfirmed(uint256 payoutBlock, uint256 timestamp);
 
-    modifier isLocked {
+    modifier onlyGov 
+    {
+        require(msg.sender == controller.governor(), "Only governance may call this function.");
+        _;
+    }
+
+    modifier isLocked 
+    {
         require(locked, "You may not do this while the contract is unlocked.");
         _;
     }
 
     // Only allow minting when there are no claims processing (people withdrawing to receive Ether).
-    modifier notLocked {
+    modifier notLocked 
+    {
         require(!locked, "You may not do this while the contract is locked.");
         _;
     }
@@ -71,23 +79,23 @@ contract arShield is Governable {
      * @param _pToken The protocol token we're protecting.
     **/
     function initialize(
-        address _gov,
         address _arToken,
         address _pToken, 
         address _uTokenLink, 
         address _oracle,
-        address[] calldata _covBases
+        address[] calldata _covBases,
+        uint256[] calldata _fees
     )
       external
     {
-        require(_arToken == address(0), "Contract already initialized.");
-        _transferOwnership( payable(_gov) );
+        require(address(arToken) == address(0), "Contract already initialized.");
         arToken = IArmorToken(_arToken);
         pToken = IERC20(_pToken);
         uTokenLink = _uTokenLink;
         oracle = IOracle(_oracle);
         controller = IController(msg.sender);
-        for(uint256 i = 0; i < _covBases.length; i++) covBases[i] = ICovBase(_covBases[i]);
+        for(uint256 i = 0; i < _covBases.length; i++) covBases.push( ICovBase(_covBases[i]) );
+        for(uint256 i = 0; i < _fees.length; i++) feePerBase.push( _fees[i] );
     }
 
     /**

@@ -1,4 +1,5 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: MIT
+
 pragma solidity 0.8.4;
 
 import '../interfaces/IYearn.sol';
@@ -50,7 +51,9 @@ contract YearnOracle {
     )
     {
         uint256 ethPerToken = _findEthPerToken(_uTokenLink);
-        uOwed = _ethOwed * 1 ether / ethPerToken;
+        uOwed = _ethOwed 
+                * 1 ether 
+                / ethPerToken;
     }
 
     /**
@@ -70,7 +73,9 @@ contract YearnOracle {
     )
     {
         uint256 oneYToken = IYearn(_yToken).getPricePerFullShare();
-        yOwed = _uOwed * 1 ether / oneYToken;
+        yOwed = _uOwed 
+                * 1 ether 
+                / oneYToken;
     }
     
     /**

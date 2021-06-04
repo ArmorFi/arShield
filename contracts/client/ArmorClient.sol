@@ -1,4 +1,5 @@
-// SPDX-License-Identifier: (c) Armor.Fi DAO, 2021
+// SPDX-License-Identifier: MIT
+
 pragma solidity 0.8.4;
 import '../interfaces/IArmorClient.sol';
 import '../libraries/ArmorCore.sol';
