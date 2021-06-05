@@ -96,6 +96,7 @@ contract arShield {
         controller = IController(msg.sender);
         for(uint256 i = 0; i < _covBases.length; i++) covBases.push( ICovBase(_covBases[i]) );
         for(uint256 i = 0; i < _fees.length; i++) feePerBase.push( _fees[i] );
+        for(uint256 i = 0; i < _fees.length; i++) feesToLiq.push(0);
     }
 
     /**
