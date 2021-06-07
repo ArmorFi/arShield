@@ -320,13 +320,14 @@ contract arShield {
 
     /**
      * @dev Funds may be withdrawn to beneficiary if any are leftover after a hack.
-     * TODO: Add ability to withdraw tokens other than arToken
+     * @param _token Address of the token to withdraw excess for. Cannot be protocol token.
     **/
-    function withdrawExcess()
+    function withdrawExcess(address _token)
       external
       notLocked
     {
-        beneficiary.transfer( address(this).balance );
+        if ( _token == address(0) ) beneficiary.transfer( address(this).balance );
+        else if ( _token != address(pToken) ) IERC20(_token).transfer( beneficiary, IERC20(_token).balanceOf( address(this) ) );
     }
     
     /**
