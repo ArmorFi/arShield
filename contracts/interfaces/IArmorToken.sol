@@ -22,7 +22,7 @@ interface IArmorToken {
     function balanceOf(address account) external view returns (uint256);
     
     // Putting in for now to replicate the compound-like token function where I can find balance at a certain block.
-    function balanceOf(address account, uint256 blockNo) external view returns (uint256);
+    function balanceOfAt(address account, uint256 blockNo) external view returns (uint256);
 
     /**
      * @dev Moves `amount` tokens from the caller's account to `recipient`.

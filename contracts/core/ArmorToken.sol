@@ -33,7 +33,6 @@ contract ArmorToken is ERC20 {
     
     function burn(uint256 _amount)
       external
-      onlyArShield
     returns (bool)
     {
         _burn(msg.sender, _amount);

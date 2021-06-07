@@ -94,9 +94,14 @@ contract arShield {
         uTokenLink = _uTokenLink;
         oracle = IOracle(_oracle);
         controller = IController(msg.sender);
-        for(uint256 i = 0; i < _covBases.length; i++) covBases.push( ICovBase(_covBases[i]) );
-        for(uint256 i = 0; i < _fees.length; i++) feePerBase.push( _fees[i] );
-        for(uint256 i = 0; i < _fees.length; i++) feesToLiq.push(0);
+
+        // CovBases and fees must always be the same length.
+        require(_covBases.length == _fees.length, "Improper length array.");
+        for(uint256 i = 0; i < _covBases.length; i++) {
+            covBases.push( ICovBase(_covBases[i]) );
+            feePerBase.push( _fees[i] );
+            feesToLiq.push(0);
+        }
     }
 
     /**
@@ -264,11 +269,13 @@ contract arShield {
         uint256 pAmount
     )
     {
-        pAmount = pToken.balanceOf( address(this) )
-                  * 1 ether // just a buffer amount here.
-                  * _arAmount
-                  / arToken.totalSupply()
-                  / 1 ether;
+        uint256 totalSupply = arToken.totalSupply();
+        if (totalSupply == 0) return _arAmount;
+
+        // TODO: Must subtract fees to liquidate here.
+        pAmount = pToken.balanceOf( address(this) ) 
+                  * _arAmount 
+                  / arToken.totalSupply();
     }
     
     /**
@@ -285,10 +292,13 @@ contract arShield {
         uint256 arAmount
     )
     {
+        uint256 balance = pToken.balanceOf( address(this) );
+        if (balance == 0) return _pAmount;
+
+        // TODO: Must subtract fees to liquidate here.
         arAmount = arToken.totalSupply() 
                    * _pAmount 
-                   / pToken.balanceOf( address(this) )
-                   / 1 ether;
+                   / pToken.balanceOf( address(this) );
     }
 
     /**
@@ -298,7 +308,7 @@ contract arShield {
       external
       isLocked
     {
-        uint256 balance = arToken.balanceOf(msg.sender, payoutBlock);
+        uint256 balance = arToken.balanceOfAt(msg.sender, payoutBlock);
         uint256 amount = (payoutAmt 
                          * balance 
                          / 1 ether) 
