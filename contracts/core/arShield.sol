@@ -17,7 +17,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 contract arShield {
 
     // Denominator for % fractions.
-    uint256 constant DENOMINATOR = 1000;
+    uint256 constant DENOMINATOR = 10000;
     // Whether or not the contract is locked.
     bool public locked;
     // Beneficiary may withdraw any extra Ether after a claims period.
@@ -138,26 +138,6 @@ contract arShield {
     }
 
     /**
-     * @dev Find the fee for deposit and withdrawal.
-    **/
-    function findFee(
-        uint256 _pAmount
-    )
-      internal
-    returns(
-        uint256 totalFee
-    )
-    {
-        for (uint256 i = 0; i < feesToLiq.length; i++) {
-            uint256 fee = _pAmount
-                          * feePerBase[i]
-                          / DENOMINATOR;
-            feesToLiq[i] += fee;
-            totalFee += fee;
-        }
-    }
-
-    /**
      * @dev Liquidate for payment for coverage by selling to people at oracle price.
     **/
     function liquidate(
@@ -272,8 +252,9 @@ contract arShield {
         uint256 totalSupply = arToken.totalSupply();
         if (totalSupply == 0) return _arAmount;
 
-        // TODO: Must subtract fees to liquidate here.
-        pAmount = pToken.balanceOf( address(this) ) 
+        pAmount = ( pToken.balanceOf( address(this) ) 
+                    // TODO: Need to subtract amount owed as well ugh
+                    - totalFeesToLiq() )
                   * _arAmount 
                   / arToken.totalSupply();
     }
@@ -295,10 +276,43 @@ contract arShield {
         uint256 balance = pToken.balanceOf( address(this) );
         if (balance == 0) return _pAmount;
 
-        // TODO: Must subtract fees to liquidate here.
         arAmount = arToken.totalSupply() 
                    * _pAmount 
-                   / pToken.balanceOf( address(this) );
+                   // TODO: Need to subtract amount owed as well ugh
+                   / ( pToken.balanceOf( address(this) )
+                       - totalFeesToLiq() );
+    }
+
+    /**
+     * @dev Need to find total fees here to subtract from pToken balance.
+    **/
+    function totalFeesToLiq()
+      public
+      view
+    returns(uint256 totalFees)
+    {
+        uint256[] memory fees = feesToLiq;
+        for (uint256 i = 0; i < fees.length; i++) totalFees += fees[i];
+    }
+
+    /**
+     * @dev Find the fee for deposit and withdrawal.
+    **/
+    function findFee(
+        uint256 _pAmount
+    )
+      internal
+    returns(
+        uint256 totalFee
+    )
+    {
+        for (uint256 i = 0; i < feesToLiq.length; i++) {
+            uint256 fee = _pAmount
+                          * feePerBase[i]
+                          / DENOMINATOR;
+            feesToLiq[i] += fee;
+            totalFee += fee;
+        }
     }
 
     /**

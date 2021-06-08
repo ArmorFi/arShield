@@ -65,6 +65,11 @@ describe("arShield", function () {
       await arShield.mint(ETHER.mul(1000));
     });
 
+      it("should increase total fees to liquidate", async function(){
+        let totalFees = await arShield.totalFeesToLiq();
+        expect(totalFees).to.be.equal( ETHER.mul(25) );
+      });
+
       it("should mint 1:1 with no pTokens in contract", async function(){
         let balance = await arToken.balanceOf( gov.getAddress() );
         expect(balance).to.be.equal(ETHER.mul(975));
@@ -72,8 +77,12 @@ describe("arShield", function () {
 
       it("should mint correctly with pTokens in contract", async function(){
         await arShield.connect(user).mint(ETHER.mul(1000));
+        // Because total supply is 1,000 but pToken balance will be 975 after fees, 1,000 pTokens deposited now grants more than 1,000 armorTokens.
+        let res = ( ETHER.mul(1000) ).mul( ETHER.mul(1000) ).div( ETHER.mul(975) );
+        console.log(res.toString());
         let balance = await arToken.balanceOf( user.getAddress() );
-        console.log(balance.toString());
+
+        expect(res).to.be.equal(balance);
       });
 
   });
@@ -83,7 +92,7 @@ describe("arShield", function () {
     beforeEach(async function() {
       await pToken.approve( arShield.address, ETHER.mul(100000) );
       await pToken.connect(user).approve( arShield.address, ETHER.mul(100000) );
-      await arShield.mint(ETHER.mul(1000));
+      await arShield.connect(gov).mint(ETHER.mul(1000));
       await arToken.approve( arShield.address, ETHER.mul(100000) );
     });
 
