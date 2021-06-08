@@ -32,7 +32,8 @@ describe("arShield", function () {
     masterCopy = await SHIELD.deploy();
     const COVBASE = await ethers.getContractFactory("CoverageBase");
     covBase = await COVBASE.deploy(controller.address);
-    const ORACLE = await ethers.getContractFactory("YearnOracle");
+    //const ORACLE = await ethers.getContractFactory("YearnOracle");
+    const ORACLE = await ethers.getContractFactory("MockYearn");
     oracle = await ORACLE.deploy();
     const PTOKEN = await ethers.getContractFactory("ERC20");
     pToken = await PTOKEN.deploy("yDAI","Yearn DAI");
@@ -67,7 +68,7 @@ describe("arShield", function () {
     });
 
       it("should increase total fees to liquidate", async function(){
-        let totalFees = await arShield.totalFeesToLiq();
+        let totalFees = await arShield.totalLiqAmts();
         expect(totalFees).to.be.equal( ETHER.mul(25).div(10) );
       });
 

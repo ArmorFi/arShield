@@ -141,6 +141,52 @@ contract arShield {
     }
 
     /**
+     * @dev Inverse of arValue (find yToken value of arToken amount).
+     * @param _arAmount Amount of arTokens to find yToken value of.
+     * @return pAmount Amount of pTokens the input arTokens are worth.
+    **/
+    function pValue(
+        uint256 _arAmount
+    )
+      public
+      view
+    returns (
+        uint256 pAmount
+    )
+    {
+        uint256 totalSupply = arToken.totalSupply();
+        if (totalSupply == 0) return _arAmount;
+
+        pAmount = ( pToken.balanceOf( address(this) ) 
+                    - totalLiqAmts() )
+                  * _arAmount 
+                  / totalSupply;
+    }
+
+    /**
+     * @dev Find the arToken value of a pToken amount.
+     * @param _pAmount Amount of yTokens to find arToken value of.
+     * @return arAmount Amount of arToken the input pTokens are worth.
+    **/
+    function arValue(
+        uint256 _pAmount
+    )
+      public
+      view
+    returns (
+        uint256 arAmount
+    )
+    {
+        uint256 balance = pToken.balanceOf( address(this) );
+        if (balance == 0) return _pAmount;
+
+        arAmount = arToken.totalSupply()
+                   * _pAmount 
+                   / ( balance
+                       - totalLiqAmts() );
+    }
+
+    /**
      * @dev Liquidate for payment for coverage by selling to people at oracle price.
     **/
     function liquidate(
@@ -193,23 +239,24 @@ contract arShield {
     )
     {
         // Find amount owed in Ether, find amount owed in protocol tokens.
-        ethOwed = covBases[covId].getOwed( address(this) );
-        tokenValue = oracle.getTokensOwed(ethOwed, address(pToken), uTokenLink);
+        ethOwed = covBases[covId].getShieldOwed( address(this) );
+        tokensOwed = oracle.getTokensOwed(ethOwed, address(pToken), uTokenLink);
 
         tokenFees = feesToLiq[covId];
         // Find the Ether value of the mint fees we have.
-        uint256 ethFees = ethOwed 
+        uint256 ethFees = tokensOwed > 0
+                          ? ethOwed 
                           * tokenFees 
-                          / tokenValue;
+                          / tokensOwed
+                          : 0;
+        tokensOwed += tokenFees;
+        ethOwed += ethFees;
 
-        tokensOwed = tokenValue + tokenFees;
         // Add a bonus of 0.5%.
         uint256 liqBonus = tokensOwed 
                            * controller.bonus()
                            / DENOMINATOR;
-
         tokensOwed += liqBonus;
-        ethOwed += ethFees;
     }
 
     function payAmts(
@@ -238,66 +285,17 @@ contract arShield {
                    / _tokenValue;
     }
 
-    /**
-     * @dev Inverse of arValue (find yToken value of arToken amount).
-     * @param _arAmount Amount of arTokens to find yToken value of.
-     * @return pAmount Amount of pTokens the input arTokens are worth.
-    **/
-    function pValue(
-        uint256 _arAmount
-    )
-      public
-      view
-    returns (
-        uint256 pAmount
-    )
-    {
-        uint256 totalSupply = arToken.totalSupply();
-        if (totalSupply == 0) return _arAmount;
-
-        pAmount = ( pToken.balanceOf( address(this) ) 
-                    // TODO: Need to subtract amount owed as well ugh
-                    - totalFeesToLiq() )
-                  * _arAmount 
-                  / totalSupply;
-    }
-
-    /**
-     * @dev Find the arToken value of a pToken amount.
-     * @param _pAmount Amount of yTokens to find arToken value of.
-     * @return arAmount Amount of arToken the input pTokens are worth.
-    **/
-    function arValue(
-        uint256 _pAmount
-    )
-      public
-      view
-    returns (
-        uint256 arAmount
-    )
-    {
-        uint256 balance = pToken.balanceOf( address(this) );
-        if (balance == 0) return _pAmount;
-
-        arAmount = arToken.totalSupply()
-                   * _pAmount 
-                   // TODO: Need to subtract amount owed as well ugh
-                   / ( balance
-                       - totalFeesToLiq() );
-    }
-
-    /**
-     * @dev Need to find total fees here to subtract from pToken balance.
-    **/
-    function totalFeesToLiq()
+    function totalLiqAmts()
       public
       view
     returns(
-        uint256 totalFees
+        uint256 totalOwed
     )
     {
-        uint256[] memory fees = feesToLiq;
-        for (uint256 i = 0; i < fees.length; i++) totalFees += fees[i];
+        for (uint256 i = 0; i < covBases.length; i++) {
+            (/*ethOwed*/, /*tokenValue*/, uint256 tokensOwed, /*tokenFees*/) = liqAmts(i);
+            totalOwed += tokensOwed;
+        }
     }
 
     /**
@@ -342,6 +340,7 @@ contract arShield {
                          * balance 
                          / 1 ether) 
                          - paid[payoutBlock][msg.sender];
+
         require(balance > 0 && amount > 0, "Sender did not have funds on payout block.");
         paid[payoutBlock][msg.sender] += amount;
         payable(msg.sender).transfer(amount);
@@ -393,6 +392,20 @@ contract arShield {
     }
     
     /**
+     * @dev Used by controller to confirm that a hack happened, which then locks the contract in anticipation of claims.
+    **/
+    function unlock()
+      external
+      isLocked
+      onlyGov
+    {
+        locked = false;
+        delete payoutBlock;
+        delete payoutAmt;
+        emit Unlocked(block.timestamp);
+    }
+
+    /**
      * @dev Block a payout if an address minted tokens after a hack occurred.
      *      There are ways people can mess with this to make it annoying to ban people,
      *      but ideally the presence of this function alone will stop malicious minting.
@@ -413,20 +426,6 @@ contract arShield {
       onlyGov
     {
         for(uint256 i = 0; i < _users.length; i++) paid[_payoutBlock][_users[i]] += _amounts[i];
-    }
-    
-    /**
-     * @dev Used by controller to confirm that a hack happened, which then locks the contract in anticipation of claims.
-    **/
-    function unlock()
-      external
-      isLocked
-      onlyGov
-    {
-        locked = false;
-        delete payoutBlock;
-        delete payoutAmt;
-        emit Unlocked(block.timestamp);
     }
 
     /**
