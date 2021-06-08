@@ -115,10 +115,12 @@ contract arShield {
       external
       notLocked
     {    
-        uint256 fee = findFee(_pAmount);
+        (uint256 fee, uint256[] memory newFees) = findFees(_pAmount);
         uint256 arAmount = arValue(_pAmount - fee);
+
         pToken.transferFrom(msg.sender, address(this), _pAmount);
         arToken.mint(msg.sender, arAmount);
+        saveFees(newFees);
         emit Mint(msg.sender, arAmount, block.timestamp);
     }
 
@@ -131,9 +133,10 @@ contract arShield {
         arToken.transferFrom(msg.sender, address(this), _arAmount);
         arToken.burn(_arAmount);
         
-        uint256 fee = findFee(pAmount);
+        (uint256 fee, uint256[] memory newFees) = findFees(pAmount);
         pToken.transfer(msg.sender, pAmount - fee);
-        
+        saveFees(newFees);
+
         emit Redemption(msg.sender, _arAmount, block.timestamp);
     }
 
@@ -256,9 +259,9 @@ contract arShield {
                     // TODO: Need to subtract amount owed as well ugh
                     - totalFeesToLiq() )
                   * _arAmount 
-                  / arToken.totalSupply();
+                  / totalSupply;
     }
-    
+
     /**
      * @dev Find the arToken value of a pToken amount.
      * @param _pAmount Amount of yTokens to find arToken value of.
@@ -276,10 +279,10 @@ contract arShield {
         uint256 balance = pToken.balanceOf( address(this) );
         if (balance == 0) return _pAmount;
 
-        arAmount = arToken.totalSupply() 
+        arAmount = arToken.totalSupply()
                    * _pAmount 
                    // TODO: Need to subtract amount owed as well ugh
-                   / ( pToken.balanceOf( address(this) )
+                   / ( balance
                        - totalFeesToLiq() );
     }
 
@@ -289,7 +292,9 @@ contract arShield {
     function totalFeesToLiq()
       public
       view
-    returns(uint256 totalFees)
+    returns(
+        uint256 totalFees
+    )
     {
         uint256[] memory fees = feesToLiq;
         for (uint256 i = 0; i < fees.length; i++) totalFees += fees[i];
@@ -298,21 +303,31 @@ contract arShield {
     /**
      * @dev Find the fee for deposit and withdrawal.
     **/
-    function findFee(
+    function findFees(
         uint256 _pAmount
     )
       internal
     returns(
-        uint256 totalFee
+        uint256 totalFee,
+        uint256[] memory newFees
     )
     {
-        for (uint256 i = 0; i < feesToLiq.length; i++) {
+        newFees = feesToLiq;
+        for (uint256 i = 0; i < newFees.length; i++) {
             uint256 fee = _pAmount
                           * feePerBase[i]
                           / DENOMINATOR;
-            feesToLiq[i] += fee;
+            newFees[i] += fee;
             totalFee += fee;
         }
+    }
+
+    function saveFees(
+        uint256[] memory liqFees
+    )
+      internal
+    {
+        for (uint256 i = 0; i < liqFees.length; i++) feesToLiq[i] = liqFees[i];
     }
 
     /**

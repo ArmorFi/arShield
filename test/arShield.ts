@@ -3,6 +3,7 @@ import { ethers } from "hardhat";
 import { Contract, Signer, BigNumber, constants } from "ethers";
 import { increase, getTimestamp } from "./utils";
 import { Address } from "ethereumjs-util";
+import { hasUncaughtExceptionCaptureCallback } from "process";
 const ETHER = BigNumber.from("1000000000000000000");
 
 describe("arShield", function () {
@@ -67,22 +68,22 @@ describe("arShield", function () {
 
       it("should increase total fees to liquidate", async function(){
         let totalFees = await arShield.totalFeesToLiq();
-        expect(totalFees).to.be.equal( ETHER.mul(25) );
+        expect(totalFees).to.be.equal( ETHER.mul(25).div(10) );
       });
 
       it("should mint 1:1 with no pTokens in contract", async function(){
         let balance = await arToken.balanceOf( gov.getAddress() );
-        expect(balance).to.be.equal(ETHER.mul(975));
+        expect(balance).to.be.equal(ETHER.mul(9975).div(10));
       });
-
+      
       it("should mint correctly with pTokens in contract", async function(){
-        await arShield.connect(user).mint(ETHER.mul(1000));
-        // Because total supply is 1,000 but pToken balance will be 975 after fees, 1,000 pTokens deposited now grants more than 1,000 armorTokens.
-        let res = ( ETHER.mul(1000) ).mul( ETHER.mul(1000) ).div( ETHER.mul(975) );
-        console.log(res.toString());
-        let balance = await arToken.balanceOf( user.getAddress() );
+        await arShield.connect(user).mint( ETHER.mul(1000) );
 
-        expect(res).to.be.equal(balance);
+        let userAr = await arToken.balanceOf( user.getAddress() );
+        expect(userAr).to.be.equal(ETHER.mul(9975).div(10));
+
+        let shieldBal = await pToken.balanceOf( arShield.address );
+        expect(shieldBal).to.be.equal( ETHER.mul(2000) );
       });
 
   });
@@ -100,7 +101,6 @@ describe("arShield", function () {
         let balance = await pToken.balanceOf( gov.getAddress() );
         await arShield.redeem(ETHER.mul(975));
         balance = await pToken.balanceOf( gov.getAddress() );
-        console.log(balance.toString());
         // expect artoken balance is 0
         // expect ptoken balance is whatever
       });

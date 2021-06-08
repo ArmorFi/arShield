@@ -2,7 +2,7 @@
 
 pragma solidity 0.8.4;
 
-import './ArmorToken.sol';
+import './ArmorToken2.sol';
 import '../general/Governable.sol';
 import '../interfaces/IarShield.sol';
 import '../interfaces/ICovBase.sol';

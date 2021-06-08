@@ -79,18 +79,17 @@ contract ArmorToken {
 
     /// @notice Constructor to create a MiniMeToken
     /// @param _tokenName Name of the new token
-    /// @param _decimalUnits Number of decimals of the new token
     /// @param _tokenSymbol Token Symbol for the new token
-    function initialize(
+    constructor(
         address _arShield,
         string memory _tokenName,
-        uint8 _decimalUnits,
         string memory _tokenSymbol
-    ) public {
+    ) 
+    {
         require(arShield == address(0), "Contract already initialized.");
         arShield = _arShield;
         name = _tokenName;                                 // Set the name
-        decimals = _decimalUnits;                          // Set the decimals
+        decimals = 18;                                     // Set the decimals
         symbol = _tokenSymbol;                             // Set the symbol
         creationBlock = block.number;
         controller = msg.sender;
