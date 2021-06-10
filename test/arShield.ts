@@ -5,11 +5,13 @@ import { increase, getTimestamp } from "./utils";
 import { Address } from "ethereumjs-util";
 import { hasUncaughtExceptionCaptureCallback } from "process";
 const ETHER = BigNumber.from("1000000000000000000");
+const ZERO_ADDY = "0x0000000000000000000000000000000000000000";
 
 describe("arShield", function () {
   let accounts: Signer[];
   let gov : Signer;
   let user : Signer;
+  let referrer : Signer;
   let arToken: Contract;
   let pToken: Contract;
   let masterCopy: Contract;
@@ -25,9 +27,10 @@ describe("arShield", function () {
     accounts = await ethers.getSigners();
     gov = accounts[0];
     user = accounts[1];
+    referrer = accounts[2];
 
     const CONTROLLER = await ethers.getContractFactory("ShieldController");
-    controller = await CONTROLLER.deploy();
+    controller = await CONTROLLER.deploy(50, 10000, ETHER.mul(10));
     const SHIELD = await ethers.getContractFactory("arShield");
     masterCopy = await SHIELD.deploy();
     const COVBASE = await ethers.getContractFactory("CoverageBase");
@@ -76,6 +79,12 @@ describe("arShield", function () {
         let balance = await arToken.balanceOf( gov.getAddress() );
         expect(balance).to.be.equal(ETHER.mul(9975).div(10));
       });
+
+      it("estimate cost", async function(){
+        let pendingMint = arShield.connect(user).mint( ETHER.mul(1000) );
+        let estimate = await user.estimateGas(pendingMint)
+        console.log(estimate.toString());
+      });
       
       it("should mint correctly with pTokens in contract", async function(){
         await arShield.connect(user).mint( ETHER.mul(1000) );
@@ -89,60 +98,164 @@ describe("arShield", function () {
 
   });
 
-  describe("#redeem", function () {
+  describe.only("#redeem", function () {
 
     beforeEach(async function() {
       await pToken.approve( arShield.address, ETHER.mul(100000) );
       await pToken.connect(user).approve( arShield.address, ETHER.mul(100000) );
-      await arShield.connect(gov).mint(ETHER.mul(1000));
+      await arShield.connect(gov).mint(ETHER.mul(1000), ZERO_ADDY);
       await arToken.approve( arShield.address, ETHER.mul(100000) );
     });
 
-      it("should redeem extra pTokens in contract", async function(){
+      it("should redeem last pTokens in contract", async function(){
         let balance = await pToken.balanceOf( gov.getAddress() );
-        await arShield.redeem(ETHER.mul(975));
-        balance = await pToken.balanceOf( gov.getAddress() );
-        // expect artoken balance is 0
-        // expect ptoken balance is whatever
+        let arBal = await arToken.balanceOf( gov.getAddress() );
+        
+        await arShield.redeem(arBal);
+        
+        let endBal = await pToken.balanceOf( gov.getAddress() );
+        let arBalance = await arToken.balanceOf( gov.getAddress() );
+        expect(arBalance).to.be.equal(0);
+        let diff = endBal.sub(balance);
+
+        // Kinda confusing to get to this number because of liquidator bonus:
+        // mint protocol fees: 1000 * 0.0025
+        // mint referral fees: 1000 * 0.0025
+        // mint liq bonus fees: mint protocol fees * 0.005
+        // full mint: 1000 * 0.005 + (1000 * 0.0025 * 0.005)
+
+        // subtract mint fees and you get 994.9875, repeat the above on that for redeem.
+        expect(diff).to.be.equal("990000125156250000000");
+      });
+      
+      it("should redeem extra pTokens from contract", async function(){
+        await arShield.connect(user).mint(ETHER.mul(1000), ZERO_ADDY);
+        let balance = await pToken.balanceOf( user.getAddress() );
+        let arBal = await arToken.balanceOf( user.getAddress() );
+
+        await arToken.connect(user).approve( arShield.address, ETHER.mul(100000) );
+        await arShield.connect(user).redeem(arBal);
+        
+        let endBal = await pToken.balanceOf( user.getAddress() );
+        let arBalance = await arToken.balanceOf( user.getAddress() );
+        expect(arBalance).to.be.equal(0);
+        
+        let diff = endBal.sub(balance);
+        expect(diff).to.be.equal("990000125156250000000");
+
+        let pBal = await pToken.balanceOf(arShield.address);
+        console.log(pBal.toString());
       });
 
-      it("should redeem last pTokens from contract", async function(){
+  });
+
+  describe("#liquidate", function () {
+
+    beforeEach(async function() {
+      await pToken.approve( arShield.address, ETHER.mul(100000) );
+      await arShield.mint(ETHER.mul(1000), ZERO_ADDY);
+      await pToken.connect(user).approve( arShield.address, ETHER.mul(1000) );
+    });
+    
+      it("should return correct amount on liqAmts", async function() {
+
+      });
+
+      it("should return correct amounts on payAmts", async function() {
+
+      });
+
+      it("should update and deposit on cov base", async function() {
+
+      });
+
+      it("should work with multiple cov bases", async function() {
 
       });
 
   });
 
-  // describe: liquidation
-
-    // liqAmts
-    // payAmts
-    // deposit update
-    // multiple cov bases
-
-  // describe: notify hack and claim
-
-    // notifyHack
-    // confirmHack
-    // claim
-    // unlock
-    // ban payouts
-
-  describe("#miscellaneous", function () {
+  describe("#hack", function () {
 
     beforeEach(async function() {
       await pToken.approve( arShield.address, ETHER.mul(100000) );
-      await pToken.connect(user).approve( arShield.address, ETHER.mul(100000) );
-      await arShield.mint(ETHER.mul(1000));
-      await arToken.approve( arShield.address, ETHER.mul(100000) );
+      await arShield.mint(ETHER.mul(1000), ZERO_ADDY);
+      await pToken.connect(user).approve( arShield.address, ETHER.mul(1000) );
+    });
+    
+      it("should pause upon correct deposit and set correct variables", async function() {
+
+      });
+
+      it("should set correct variables upon confirmation", async function() {
+
+      });
+
+      it("should be able to ban payouts from users", async function() {
+
+      });
+
+      it("should be able to claim funds", async function() {
+
+      });
+  
+      it("should be able to unlock contract", async function() {
+
+      });
+
+  });
+
+  describe("#referrals", function () {
+
+    beforeEach(async function() {
+      await pToken.approve( arShield.address, ETHER.mul(100000) );
+      await arShield.mint(ETHER.mul(1000), ZERO_ADDY);
+      await pToken.connect(user).approve( arShield.address, ETHER.mul(1000) );
+    });
+    
+      // fee is currently set to 100% of protocol fee, so should be 0.25%.
+      it("should charge correct amount", async function() {
+        let refBal = await arShield.refBals(gov.getAddress());
+        expect(refBal).to.be.equal("2500000000000000000")
+      });
+
+      it("should give referral to correct user", async function() {
+        await arShield.connect(user).mint( ETHER.mul(1000), referrer.getAddress() );
+        let ref = await arShield.referrers( user.getAddress() );
+        expect(ref).to.be.equal( await referrer.getAddress() );
+      });
+
+      it("should be able to withdraw", async function() {
+        let bal = await pToken.balanceOf( gov.getAddress() );
+        await arShield.withdraw( gov.getAddress() );
+        let endBal = await pToken.balanceOf( gov.getAddress() );
+        expect(endBal).to.be.equal( bal.add("2500000000000000000") )
+      });
+  
+  });
+
+  describe("#miscellaneous", function () {
+
+    it("should be able to change fees", async function() {
+      await arShield.connect(gov).changeFees([50]);
+      let fee = await arShield.feePerBase(0);
+      expect(fee).to.be.equal(50);
     });
 
-      it("should be able to change fees", async function(){
+    it("should be able to withdraw excess", async function() {
+      await gov.sendTransaction( {'to':arShield.address, 'value':ETHER} );
+      let balance = await gov.getBalance();
+      await arShield.withdrawExcess( ZERO_ADDY, gov.getAddress() );
+      let endBal = await gov.getBalance();
+      // pain to account for gas
+      expect(endBal).to.not.equal(balance);
 
-      });
-
-      it("should be able to withdraw excess", async function(){
-
-      });
+      await arToken.transfer( arShield.address, ETHER.mul(100) );
+      balance = await arToken.balanceOf( gov.getAddress() );
+      await arShield.withdrawExcess( arToken.address, gov.getAddress() );
+      endBal = await arToken.balanceOf( gov.getAddress() );
+      expect(endBal).to.be.equal( balance.add( ETHER.mul(100) ) );
+    });
 
   });
 

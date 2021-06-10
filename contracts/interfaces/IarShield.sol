@@ -8,6 +8,7 @@ interface IarShield {
         address _pToken,
         address _uTokenLink,
         address _oracle,
+        address payable _beneficiary,
         address[] calldata _covBases,
         uint256[] calldata _fees
     ) 

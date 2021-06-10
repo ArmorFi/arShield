@@ -13,14 +13,23 @@ contract ShieldController is Governable {
 
     // Liquidation bonus for users who are liquidating funds.
     uint256 public bonus;
+    // Fee % for referrals. 10000 == 100% of the rest of the fees.
+    uint256 public refFee;
     // Amount that needs to be deposited to lock the contract.
     uint256 public depositAmt;
     // List of all arShields
     address[] public arShields;
 
-    constructor()
+    constructor(
+        uint256 _bonus,
+        uint256 _refFee,
+        uint256 _depositAmt
+    )
     {
         initializeOwnable();
+        bonus = _bonus;
+        refFee = _refFee;
+        depositAmt = _depositAmt;
     }
 
     /**
@@ -47,6 +56,7 @@ contract ShieldController is Governable {
             _pToken,
             _uTokenLink,
             _oracle,
+            payable(msg.sender),
             _covBases,
             _fees
         );
@@ -98,6 +108,20 @@ contract ShieldController is Governable {
       onlyGov
     {
         depositAmt = _depositAmt;
+    }
+
+    /**
+     * @dev Change amount required to deposit to lock a shield.
+     * @param _refFee New fee to be paid to referrers. 10000 == 100%
+     *                of the protocol fees that will be charged.
+    **/
+    function changeRefFee(
+        uint256 _refFee
+    )
+      external
+      onlyGov
+    {
+        refFee = _refFee;
     }
 
     /**

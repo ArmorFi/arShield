@@ -18,10 +18,10 @@ contract arShield {
 
     // Denominator for % fractions.
     uint256 constant DENOMINATOR = 10000;
+    // Address that will receive default referral fees and excess eth/tokens.
+    address payable public beneficiary;
     // Whether or not the contract is locked.
     bool public locked;
-    // Beneficiary may withdraw any extra Ether after a claims period.
-    address payable public beneficiary;
     // Block at which users must be holding tokens to receive a payout.
     uint256 public payoutBlock;
     // Amount to payout in Ether per token for the most recent hack.
@@ -34,14 +34,23 @@ contract arShield {
     uint256[] public feePerBase;
     // Whether user has been paid for a specific payout block.
     mapping (uint256 => mapping (address => uint256)) public paid;
+    // Balance of referrers.
+    // referral => referrer
+    mapping (address => address) public referrers;
+    mapping (address => uint256) public refBals;
+    uint256 public refTotal;
+    // Fee to pay referrers as % of protocol fees. 10000 == 100%.
+    // If protocol fees are 0.1% and refFee is 10000, refFee is 0.1%.
+    uint256 public refFee;
 
+    // Chainlink address for the underlying token.
     address public uTokenLink;
-    // The armorToken that this shield issues.
-    IArmorToken public arToken;
     // Protocol token that we're providing protection for.
     IERC20 public pToken;
     // Oracle to find uToken price.
     IOracle public oracle;
+    // The armorToken that this shield issues.
+    IArmorToken public arToken;
     // Used for universal variables (all shields) such as bonus for liquidation.
     IController public controller;
     // Coverage bases that we need to be paying.
@@ -83,6 +92,7 @@ contract arShield {
         address _pToken, 
         address _uTokenLink, 
         address _oracle,
+        address payable _beneficiary,
         address[] calldata _covBases,
         uint256[] calldata _fees
     )
@@ -94,6 +104,7 @@ contract arShield {
         uTokenLink = _uTokenLink;
         oracle = IOracle(_oracle);
         controller = IController(msg.sender);
+        beneficiary = _beneficiary;
 
         // CovBases and fees must always be the same length.
         require(_covBases.length == _fees.length, "Improper length array.");
@@ -110,17 +121,22 @@ contract arShield {
      * @param _pAmount Amount of pTokens to deposit to the contract.
     **/
     function mint(
-        uint256 _pAmount
+        uint256 _pAmount,
+        address _referrer
     )
       external
       notLocked
-    {    
-        (uint256 fee, uint256[] memory newFees) = findFees(_pAmount);
+    {
+        if ( referrers[msg.sender] == address(0) ) referrers[msg.sender] = _referrer == address(0) ? beneficiary : _referrer;
+
+        // fee is total including refFee
+        (uint256 fee, uint256 refFee, uint256[] memory newFees) = findFees(_pAmount);
         uint256 arAmount = arValue(_pAmount - fee);
 
         pToken.transferFrom(msg.sender, address(this), _pAmount);
         arToken.mint(msg.sender, arAmount);
-        saveFees(newFees);
+        saveFees(newFees, refFee);
+
         emit Mint(msg.sender, arAmount, block.timestamp);
     }
 
@@ -133,57 +149,11 @@ contract arShield {
         arToken.transferFrom(msg.sender, address(this), _arAmount);
         arToken.burn(_arAmount);
         
-        (uint256 fee, uint256[] memory newFees) = findFees(pAmount);
+        (uint256 fee, uint256 refFee, uint256[] memory newFees) = findFees(pAmount);
         pToken.transfer(msg.sender, pAmount - fee);
-        saveFees(newFees);
+        saveFees(newFees, refFee);
 
         emit Redemption(msg.sender, _arAmount, block.timestamp);
-    }
-
-    /**
-     * @dev Inverse of arValue (find yToken value of arToken amount).
-     * @param _arAmount Amount of arTokens to find yToken value of.
-     * @return pAmount Amount of pTokens the input arTokens are worth.
-    **/
-    function pValue(
-        uint256 _arAmount
-    )
-      public
-      view
-    returns (
-        uint256 pAmount
-    )
-    {
-        uint256 totalSupply = arToken.totalSupply();
-        if (totalSupply == 0) return _arAmount;
-
-        pAmount = ( pToken.balanceOf( address(this) ) 
-                    - totalLiqAmts() )
-                  * _arAmount 
-                  / totalSupply;
-    }
-
-    /**
-     * @dev Find the arToken value of a pToken amount.
-     * @param _pAmount Amount of yTokens to find arToken value of.
-     * @return arAmount Amount of arToken the input pTokens are worth.
-    **/
-    function arValue(
-        uint256 _pAmount
-    )
-      public
-      view
-    returns (
-        uint256 arAmount
-    )
-    {
-        uint256 balance = pToken.balanceOf( address(this) );
-        if (balance == 0) return _pAmount;
-
-        arAmount = arToken.totalSupply()
-                   * _pAmount 
-                   / ( balance
-                       - totalLiqAmts() );
     }
 
     /**
@@ -222,6 +192,86 @@ contract arShield {
     }
 
     /**
+     * @dev Claim funds if you were holding tokens on the payout block.
+    **/
+    function claim()
+      external
+      isLocked
+    {
+        // Find balance at the payout block, multiply by the amount per token to pay, subtract anything paid.
+        uint256 balance = arToken.balanceOfAt(msg.sender, payoutBlock);
+        uint256 amount = (payoutAmt
+                          * balance 
+                          / 1 ether) 
+                          - paid[payoutBlock][msg.sender];
+
+        require(balance > 0 && amount > 0, "Sender did not have funds on payout block.");
+        paid[payoutBlock][msg.sender] += amount;
+        payable(msg.sender).transfer(amount);
+    }
+
+    /**
+     * @dev Used by referrers to withdraw their owed balance.
+    **/
+    function withdraw(
+        address _user
+    )
+      external
+    {
+        uint256 balance = refBals[_user];
+        refBals[_user] = 0;
+        pToken.transfer(_user, balance);
+    }
+
+    /**
+     * @dev Inverse of arValue (find yToken value of arToken amount).
+     * @param _arAmount Amount of arTokens to find yToken value of.
+     * @return pAmount Amount of pTokens the input arTokens are worth.
+    **/
+    function pValue(
+        uint256 _arAmount
+    )
+      public
+      view
+    returns (
+        uint256 pAmount
+    )
+    {
+        uint256 totalSupply = arToken.totalSupply();
+        if (totalSupply == 0) return _arAmount;
+
+        pAmount = (pToken.balanceOf( address(this) ) 
+                   - totalLiqAmts()
+                   - refTotal)
+                  * _arAmount 
+                  / totalSupply;
+    }
+
+    /**
+     * @dev Find the arToken value of a pToken amount.
+     * @param _pAmount Amount of yTokens to find arToken value of.
+     * @return arAmount Amount of arToken the input pTokens are worth.
+    **/
+    function arValue(
+        uint256 _pAmount
+    )
+      public
+      view
+    returns (
+        uint256 arAmount
+    )
+    {
+        uint256 balance = pToken.balanceOf( address(this) );
+        if (balance == 0) return _pAmount;
+
+        arAmount = arToken.totalSupply()
+                   * _pAmount 
+                   / (balance
+                      - totalLiqAmts()
+                      - refTotal);
+    }
+
+    /**
      * @dev Amounts owed to be liquidated.
      * @return ethOwed Amount of Ether owed to coverage base.
      * @return tokenValue Amount of tokens owed to liquidator for that Ether.
@@ -243,22 +293,26 @@ contract arShield {
         tokensOwed = oracle.getTokensOwed(ethOwed, address(pToken), uTokenLink);
 
         tokenFees = feesToLiq[covId];
+        tokensOwed += tokenFees;
+
         // Find the Ether value of the mint fees we have.
         uint256 ethFees = tokensOwed > 0
                           ? ethOwed 
                           * tokenFees 
                           / tokensOwed
                           : 0;
-        tokensOwed += tokenFees;
         ethOwed += ethFees;
 
-        // Add a bonus of 0.5%.
+        // Add a bonus for liquidators (0.5% to start).
         uint256 liqBonus = tokensOwed 
                            * controller.bonus()
                            / DENOMINATOR;
         tokensOwed += liqBonus;
     }
 
+    /**
+     * @dev Find amount to pay a liquidator--needed because a liquidator may not pay all Ether. 
+    **/
     function payAmts(
         uint256 _ethIn,
         uint256 _ethOwed,
@@ -274,17 +328,26 @@ contract arShield {
         uint256 ethValue
     )
     {
+        // Actual amount we're liquidating (liquidator may not pay full Ether owed).
         tokensOut = _ethIn
                     * _tokensOwed
                     / _ethOwed;
+
+        // Amount of fees for this protocol being paid.
         feesPaid = _ethIn
                    * _tokenFees
                    / _ethOwed;
-        ethValue = pToken.balanceOf( address(this) )
+
+        // Ether value of all of the contract minus what we're liquidating.
+        ethValue = (pToken.balanceOf( address(this) )
+                   - _tokensOut)
                    * _ethOwed
                    / _tokenValue;
     }
 
+    /**
+     * @dev Find total amount of tokens to be liquidated.
+    **/
     function totalLiqAmts()
       public
       view
@@ -300,16 +363,20 @@ contract arShield {
 
     /**
      * @dev Find the fee for deposit and withdrawal.
+     * @param _pAmount The amount of pTokens to find the fee of.
     **/
     function findFees(
         uint256 _pAmount
     )
       internal
+      view
     returns(
         uint256 totalFee,
+        uint256 refFee,
         uint256[] memory newFees
     )
     {
+        // Find protocol fees for each coverage base.
         newFees = feesToLiq;
         for (uint256 i = 0; i < newFees.length; i++) {
             uint256 fee = _pAmount
@@ -318,44 +385,35 @@ contract arShield {
             newFees[i] += fee;
             totalFee += fee;
         }
+
+        // Add referral fee.
+        refFee = totalFee 
+                 * controller.refFee() 
+                 / DENOMINATOR;
+        totalFee += refFee;
+
+        // Add liquidator bonus.
+        uint256 liqBonus = (totalFee
+                           - refFee) 
+                           * controller.bonus()
+                           / DENOMINATOR;
+        totalFee += liqBonus;
     }
 
+    /**
+     * @dev Save new coverage fees and referral fees.
+     * @param liqFees Fees associated with depositing to a coverage base.
+     * @param _refFee Fee given to the address that referred this user.
+    **/
     function saveFees(
-        uint256[] memory liqFees
+        uint256[] memory liqFees,
+        uint256 _refFee
     )
       internal
     {
+        refTotal += _refFee;
+        refBals[ referrers[msg.sender] ] += _refFee;
         for (uint256 i = 0; i < liqFees.length; i++) feesToLiq[i] = liqFees[i];
-    }
-
-    /**
-     * @dev Claim funds if you were holding tokens on the payout block.
-    **/
-    function claim()
-      external
-      isLocked
-    {
-        uint256 balance = arToken.balanceOfAt(msg.sender, payoutBlock);
-        uint256 amount = (payoutAmt 
-                         * balance 
-                         / 1 ether) 
-                         - paid[payoutBlock][msg.sender];
-
-        require(balance > 0 && amount > 0, "Sender did not have funds on payout block.");
-        paid[payoutBlock][msg.sender] += amount;
-        payable(msg.sender).transfer(amount);
-    }
-
-    /**
-     * @dev Funds may be withdrawn to beneficiary if any are leftover after a hack.
-     * @param _token Address of the token to withdraw excess for. Cannot be protocol token.
-    **/
-    function withdrawExcess(address _token)
-      external
-      notLocked
-    {
-        if ( _token == address(0) ) beneficiary.transfer( address(this).balance );
-        else if ( _token != address(pToken) ) IERC20(_token).transfer( beneficiary, IERC20(_token).balanceOf( address(this) ) );
     }
     
     /**
@@ -375,6 +433,9 @@ contract arShield {
     
     /**
      * @dev Used by controller to confirm that a hack happened, which then locks the contract in anticipation of claims.
+     * @param _payoutBlock Block that user must have had tokens at. Will not be the same as when the hack occurred
+     *                     because we will need to give time for users to withdraw from dexes and such if needed.
+     * @param _payoutAmt The amount of Ether PER TOKEN that users will be given for this claim.
     **/
     function confirmHack(
         uint256 _payoutBlock,
@@ -425,12 +486,12 @@ contract arShield {
       external
       onlyGov
     {
-        for(uint256 i = 0; i < _users.length; i++) paid[_payoutBlock][_users[i]] += _amounts[i];
+        for (uint256 i = 0; i < _users.length; i++) paid[_payoutBlock][_users[i]] += _amounts[i];
     }
 
     /**
      * @dev Change the fees taken for minting and redeeming.
-     * @param _newFees Array for each of the 
+     * @param _newFees Array for each of the new fees. 10 == 0.1% fee.
     **/
     function changeFees(
         uint256[] calldata _newFees
@@ -440,6 +501,18 @@ contract arShield {
     {
         require(_newFees.length == feePerBase.length, "Improper fees length.");
         for (uint256 i = 0; i < _newFees.length; i++) feePerBase[i] = _newFees[i];
+    }
+
+    /**
+     * @dev Funds may be withdrawn to beneficiary if any are leftover after a hack.
+     * @param _token Address of the token to withdraw excess for. Cannot be protocol token.
+    **/
+    function withdrawExcess(address _token)
+      external
+      notLocked
+    {
+        if ( _token == address(0) ) beneficiary.transfer( address(this).balance );
+        else if ( _token != address(pToken) ) IERC20(_token).transfer( beneficiary, IERC20(_token).balanceOf( address(this) ) );
     }
 
 }
