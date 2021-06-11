@@ -27,7 +27,7 @@ contract YearnOracle {
         uint256 yOwed
     )
     {   
-        uint256 uOwed = ethToU(ethOwed, _uTokenLink);
+        uint256 uOwed = ethToU(_ethOwed, _uTokenLink);
         yOwed = uToY(_yToken, uOwed);
     }
     
@@ -80,11 +80,12 @@ contract YearnOracle {
         address _uTokenLink
     )
       internal
+      view
     returns (
         uint256 ethPerToken
     )
     {
-        (/*roundIf*/, int tokenPrice, /*startedAt*/, /*timestamp*/, /*answeredInRound*/) = AggregatorV3Interface(_uTokenLink).latestAnswer();
+        (/*roundIf*/, int tokenPrice, /*startedAt*/, /*timestamp*/, /*answeredInRound*/) = AggregatorV3Interface(_uTokenLink).latestRoundData();
         ethPerToken = uint256(tokenPrice);
     }
     
