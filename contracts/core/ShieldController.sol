@@ -1,6 +1,8 @@
+// SPDX-License-Identifier: MIT
+
 pragma solidity ^0.8.0;
-import './IarShield.sol';
-import './OwnedUpgradeabilityProxy.sol';
+import '../interfaces/IarShield.sol';
+import '../proxies/OwnedUpgradeabilityProxy.sol';
 
 contract ShieldController {
 
@@ -15,6 +17,13 @@ contract ShieldController {
 
     address[] public arShields;
 
+    address public gov;
+
+    modifier onlyGov() {
+        require(msg.sender == gov, "!gov");
+        _;
+    }
+
     /**
      * @dev Create a new arShield from an already-created family.
     **/
@@ -22,7 +31,7 @@ contract ShieldController {
         address _masterCopy,
         address _pToken,
         address _uTokenLink,
-        address[] _covBases,
+        address[] calldata _covBases,
         address _oracle,
         uint256[] calldata _fees
     )
@@ -33,10 +42,11 @@ contract ShieldController {
         address proxy = new Proxy(_masterCopy);
         
         IarShield(proxy).initialize(
+            token,
             _pToken,
             _uTokenLink,
-            _covBases,
             _oracle,
+            _covBases,
             _fees
         );
         

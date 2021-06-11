@@ -1,6 +1,8 @@
-pragma solidity 0.6.12;
-import './IYearn.sol';
-import './AggregatorV3Interface';
+// SPDX-License-Identifier: MIT
+
+pragma solidity ^0.8.0;
+import './IYearnV2.sol';
+import '../interfaces/AggregatorV3Interface.sol';
 
 /**
  * @dev Uses Chainlink to find the price of underlying Yearn assets,
@@ -65,8 +67,8 @@ contract YearnOracle {
         uint256 yOwed
     )
     {
-        uint256 oneYToken = IYearn(_yToken).getPricePerFullShare();
-        yOwed = _uOwed * 1 ether / oneYToken;
+        uint256 oneYToken = IYearnV2(_yToken).pricePerShare();
+        yOwed = _uOwed * (10 ** IYearnV2(_yToken).decimals()) / oneYToken;
     }
     
     /**

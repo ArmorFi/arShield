@@ -13,18 +13,6 @@ export default {
   solidity: {
     compilers :[
       {
-        version: "0.6.6",
-      },
-      {
-        version:"0.5.16",
-        settings:{
-          optimizer: {
-            enabled: true,
-            runs: 999999
-          }
-        }
-      },
-      {
         version: "0.6.12",
         settings: {
           optimizer : {
@@ -34,7 +22,7 @@ export default {
         }
       },
       {
-        version: "0.5.17",
+        version: "0.8.5",
         settings: {
           optimizer : {
             enabled: true,

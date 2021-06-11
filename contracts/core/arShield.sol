@@ -1,7 +1,10 @@
+// SPDX-License-Identifier: MIT
+
 pragma solidity 0.6.12;
 import '../general/SafeMath.sol';
-import '../interfaces/IyDAI.sol';
-
+import '../interfaces/IERC20.sol';
+import '../interfaces/IOracle.sol';
+import '../interfaces/IShieldController.sol';
 /**
  * @title Armor Shield
  * @dev arShield base provides the base functionality of arShield contracts.
@@ -11,10 +14,11 @@ contract arShield {
 
     using SafeMath for uint;
 
+    bool internal _mutex;
     // Buffer amount for division.
     uint256 constant private BUFFER = 1e18;
     // Whether or not the contract is locked.
-    bool public locked;
+    bool internal _locked;
     // Beneficiary may withdraw any extra Ether after a claims period.
     address payable public beneficiary;
     // Block at which users must be holding tokens to receive a payout.
@@ -37,9 +41,9 @@ contract arShield {
     // Underlying token of the pToken.
     IERC20 public uToken;
     // Oracle to find uToken price.
-    Oracle public oracle;
+    IOracle public oracle;
     // Controller of the arShields.
-    ShieldController public controller;
+    IShieldController public controller;
     // Coverage bases that we need to be paying.
     address[] public covBases;
 
@@ -50,7 +54,7 @@ contract arShield {
         uint112 pAmount;
     }
 
-    event MintRequest(address indexed user, uint256 amount, uint256 timestamp);
+    event MintRequested(address indexed user, uint256 amount, uint256 timestamp);
     event MintFinalized(address indexed user, uint256 amount, uint256 timestamp);
     event MintCancelled(address indexed user, uint256 amount, uint256 timestamp);
     event Redemption(address indexed user, uint256 amount, uint256 timestamp);
@@ -59,22 +63,32 @@ contract arShield {
     event HackConfirmed(uint256 payoutBlock, uint256 timestamp);
 
     modifier locked {
-        require(locked, "You may not do this while the contract is unlocked.");
+        require(_locked, "You may not do this while the contract is unlocked.");
         _;
     }
 
     // Only allow minting when there are no claims processing (people withdrawing to receive Ether).
     modifier notLocked {
-        require(!locked, "You may not do this while the contract is locked.");
+        require(!_locked, "You may not do this while the contract is locked.");
         _;
+    }
+
+    modifier onlyGov {
+        require(msg.sender == controller.gov(), "!gov");
+        _;
+    }
+
+    modifier nonReentrant {
+        require(!_mutex, "reentrancy");
+        _mutex = true;
+        _;
+        _mutex = false;
     }
     
     receive() external payable;
     
     /**
      * @dev Initialize the contract
-     * @param _master Address of the Armor master contract.
-     * @param _pToken The protocol token we're protecting.
     **/
     function initialize(
         address _arToken,
@@ -85,17 +99,17 @@ contract arShield {
     )
       external
     {
+        arToken = IERC20(_arToken);
         pToken = IERC20(_pToken);
         uToken = IERC20(_uToken);
-        oracle = Oracle(_oracle);
-        controller = Controller(msg.sender);
+        oracle = IOracle(_oracle);
+        controller = IShieldController(msg.sender);
     }
 
     /**
      * @dev User deposits pToken, is returned arToken. Amount returned is judged based off amount in contract.
      *      Amount returned will likely be more than deposited because pTokens will be removed to pay for cover.
      * @param _pAmount Amount of pTokens to deposit to the contract.
-     * @param _beneficiary User who a finalized mint may be sent to
     **/
     function mint(
         uint256 _pAmount
@@ -178,7 +192,6 @@ contract arShield {
     /**
      * @dev Amounts owed to be liquidated.
      * @return ethOwed Amount of Ether owed to coverage base.
-     * @return tokensOwed Amount of tokens owed to liquidator for that Ether.
     **/
     function liqAmts(uint256 covId)
       public
@@ -200,7 +213,7 @@ contract arShield {
 
         tokensOwed = tokenValue.add(tokenFees);
         // Add a bonus of 0.5%.
-        uint256 liqBonus = (tokensOwed * controller.bonus / DENOMINATOR);
+        uint256 liqBonus = (tokensOwed * controller.bonus() / DENOMINATOR);
 
         tokensOwed = tokensOwed.add(liqBonus);
         ethOwed = ethOwed.add(ethFees);
