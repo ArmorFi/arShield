@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+
 pragma solidity 0.8.4;
 
 import '../interfaces/IOracle.sol';
@@ -125,6 +126,7 @@ contract arShield {
      * @dev User deposits pToken, is returned arToken. Amount returned is judged based off amount in contract.
      *      Amount returned will likely be more than deposited because pTokens will be removed to pay for cover.
      * @param _pAmount Amount of pTokens to deposit to the contract.
+     * @param _referrer The address that referred the user to arShield.
     **/
     function mint(
         uint256 _pAmount,
@@ -156,13 +158,19 @@ contract arShield {
     /**
      * @dev Redeem arTokens for underlying pTokens.
      * @param _arAmount Amount of arTokens to redeem.
+     * @param _referrer The address that referred the user to arShield.
     **/
     function redeem(
-        uint256 _arAmount
+        uint256 _arAmount,
+        address _referrer
     )
       external
     {
         address user = msg.sender;
+        if ( referrers[user] == address(0) ) {
+            referrers[user] = _referrer == address(0) ? beneficiary : _referrer;
+        }
+
         uint256 pAmount = pValue(_arAmount);
         arToken.transferFrom(user, address(this), _arAmount);
         arToken.burn(_arAmount);
