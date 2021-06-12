@@ -7,7 +7,11 @@ import '../interfaces/IarShield.sol';
 import '../interfaces/ICovBase.sol';
 import '../proxies/OwnedUpgradeabilityProxy.sol';
 
-
+/** 
+ * @title Shield Controller
+ * @dev Shield Controller is in charge of creating new shields and storing universal variables.
+ * @author Armor.fi -- Robert M.C. Forster
+**/
 contract ShieldController is Governable {
 
     // Liquidation bonus for users who are liquidating funds.

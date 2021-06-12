@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: MIT
-
 pragma solidity 0.8.4;
 
 import '../interfaces/IOracle.sol';
@@ -12,7 +11,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 /**
  * @title Armor Shield
  * @dev arShield base provides the base functionality of arShield contracts.
- * @author Armor.Fi -- Robert M.C. Forster
+ * @author Armor.fi -- Robert M.C. Forster
 **/
 contract arShield {
 

@@ -5,7 +5,11 @@ pragma solidity 0.8.4;
 import '../client/ArmorClient.sol';
 import '../interfaces/IController.sol';
 
-
+/**
+ * @title Coverage Base
+ * @dev Coverage base takes care of all Armor Core interactions for arShields.
+ * @author Armor.fi -- Robert M.C. Forster
+**/
 contract CoverageBase is ArmorClient {
     
     // Denominator for coverage percent.

@@ -7,9 +7,10 @@ import '../interfaces/AggregatorV3Interface.sol';
 
 
 /**
- * @dev Uses Chainlink to find the price of underlying Yearn assets,
+ * @title Yearn Oracle
+ * @dev Yearn Oracle uses Chainlink to find the price of underlying Yearn assets,
  *      then determines amount of yTokens to pay for Ether needed by shield.
- * @author Armor.Fi -- Robert M.C. Forster
+ * @author Armor.fi -- Robert M.C. Forster
 **/
 contract YearnOracle {
 
