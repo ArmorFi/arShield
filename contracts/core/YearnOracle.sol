@@ -18,6 +18,7 @@ contract YearnOracle {
      * @param _ethOwed Amount of Ether that the shield owes to coverage base.
      * @param _yToken Address of the Yearn token to find value of.
      * @param _uTokenLink Chainlink address to get price of the underlying token.
+     * @return yOwed Amount of Yearn token owed for this amount of Ether.
     **/
     function getTokensOwed(
         uint256 _ethOwed,
@@ -39,6 +40,7 @@ contract YearnOracle {
      * @param _tokensOwed Amounts of tokens to find value of.
      * @param _yToken Address of the Yearn token that value is being found for.
      * @param _uTokenLink ChainLink address for the underlying token.
+     * @return ethOwed Amount of Ether owed for this amount of tokens.
     **/
     function getEthOwed(
         uint256 _tokensOwed,

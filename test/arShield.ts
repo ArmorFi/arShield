@@ -148,7 +148,7 @@ describe("arShield", function () {
 
   });
 
-  describe.only("#liquidate", function () {
+  describe("#liquidate", function () {
 
     beforeEach(async function() {
       await pToken.approve( arShield.address, ETHER.mul(100000) );
@@ -157,8 +157,18 @@ describe("arShield", function () {
     });
 
       it("should return correct amounts on liqAmts", async function() {
+        let ethOwed = ETHER;
+        // 1000 tokens deposited, 25 tokens owed
+        let tokensOwed = ETHER.mul(25).div(10);
+        // Add the liquidator bonus.
+        tokensOwed = tokensOwed.add(tokensOwed.div(200));
+        let tokenFees = ETHER.mul(25).div(10);
+
         let liqAmt = await arShield.liqAmts(0);
-        expect(liqAmt).to.be.equal("1000000000000000000");
+        // 1 Ether, 2.5 tokens (0.25%) liq fees, 2.5 + 0.5% total tokens owed
+        expect(liqAmt[0]).to.be.equal(ethOwed);
+        expect(liqAmt[1]).to.be.equal(tokensOwed);
+        expect(liqAmt[2]).to.be.equal(tokenFees);
       });
 
       it("should return correct amounts on payAmts", async function() {
@@ -168,14 +178,11 @@ describe("arShield", function () {
       it("should liquidate full liqAmts with 0 tokens owed, send to covBase, adjust liqAmts", async function() {
         await arShield.liquidate(0, {value: ETHER});
 
-        let testBal = await arShield.getBalance();
-        console.log(testBal.toString());
-
         let bal = await pToken.balanceOf( gov.getAddress() );
         expect(bal).to.be.equal("899002512500000000000000");
-        let shieldBal = await arShield.getBalance();
+        let shieldBal = await gov.provider.getBalance(arShield.address);
         expect(shieldBal).to.be.equal("0")
-        let covBal = await arShield.getBalance();
+        let covBal = await gov.provider.getBalance(covBase.address);
         expect(covBal).to.be.equal("1000000000000000000")
 
         let liqAmt = await arShield.feesToLiq(0);
@@ -193,20 +200,13 @@ describe("arShield", function () {
         // 10 tokens given the value of 0.1 ETHER
         await oracle.changeTokensOwed(ETHER.mul(10));
 
-        // really annoying calculations to find out how much the mint fees are worth
-        let mintFee = ETHER.div(10).mul(1000).div(400).add(ETHER.mul(1000).div(400).div(200));
-        console.log(mintFee);
-
-        await arShield.liquidate(0, {value: ETHER})
+        let liqAmt = await arShield.liqAmts(0);
+        await arShield.liquidate(0, {value: liqAmt[0].toString()})
       });
 
       it("should fail on too much Ether", async function() {
         await expect(arShield.liquidate(0, {value: ETHER.mul(2)})).to.be.revertedWith("Too much Ether paid.");
       });     
-
-      it("should update and deposit on cov base", async function() {
-
-      });
 
       it("should work with multiple cov bases", async function() {
 
@@ -214,7 +214,7 @@ describe("arShield", function () {
 
   });
 
-  describe("#hack", function () {
+  describe.only("#hack", function () {
 
     beforeEach(async function() {
       await pToken.approve( arShield.address, ETHER.mul(100000) );
@@ -223,15 +223,23 @@ describe("arShield", function () {
     });
     
       it("should pause upon correct deposit and set correct variables", async function() {
+        await arShield.connect(user).notifyHack({value:ETHER.mul(10)});
+        let locked = await arShield.locked();
+        expect(locked).to.be.equal(true);
+      });
 
+      it("should not pause upon wrong deposit", async function() {
+        await expect(arShield.connect(user).notifyHack({value:ETHER.mul(0)})).to.have.revertedWith("You must pay the deposit amount to notify a hack.");
       });
 
       it("should set correct variables upon confirmation", async function() {
-
+        await arShield.connect(gov).confirmHack(69,420);
+        await expect(arShield.payoutBlock()).to.be.equal(69);
+        await expect(arShield.payoutAmt()).to.be.equal(420);
       });
 
       it("should be able to ban payouts from users", async function() {
-
+        await arShield.banPayouts( [referrer.getAddress()] )
       });
 
       it("should be able to claim funds", async function() {
@@ -239,7 +247,13 @@ describe("arShield", function () {
       });
   
       it("should be able to unlock contract", async function() {
+        await arShield.connect(user).notifyHack({value:ETHER.mul(10)});
+        await arShield.connect(gov).unlock();
+        expect(await arShield.locked()).to.be.equal(false);
+      });
 
+      it("should not be able to unlock if not gov", async function() {
+        expect(await arShield.connect(user).unlock()).to.be.revertedWith("You may not do this while the contract is unlocked.");
       });
 
   });

@@ -18,27 +18,30 @@ contract arShield {
 
     // Denominator for % fractions.
     uint256 constant DENOMINATOR = 10000;
-    // Address that will receive default referral fees and excess eth/tokens.
-    address payable public beneficiary;
+    
     // Whether or not the contract is locked.
     bool public locked;
-    // Block at which users must be holding tokens to receive a payout.
-    uint256 public payoutBlock;
-    // Amount to payout in Ether per token for the most recent hack.
-    uint256 public payoutAmt;
+    // Address that will receive default referral fees and excess eth/tokens.
+    address payable public beneficiary;
     // User who deposited to notify of a hack.
     address public depositor;
+    // Amount to payout in Ether per token for the most recent hack.
+    uint256 public payoutAmt;
+    // Block at which users must be holding tokens to receive a payout.
+    uint256 public payoutBlock;
+    // Total amount to be paid to referrers.
+    uint256 public refTotal;
     // 0.25% paid for minting in order to pay for the first week of coverage--can be immediately liquidated.
     uint256[] public feesToLiq;
     // Different amounts to charge as a fee for each protocol.
     uint256[] public feePerBase;
-    // Whether user has been paid for a specific payout block.
-    mapping (uint256 => mapping (address => uint256)) public paid;
-    // Balance of referrers.
+
     // referral => referrer
     mapping (address => address) public referrers;
+    // Balance of referrers.
     mapping (address => uint256) public refBals;
-    uint256 public refTotal;
+   // Whether user has been paid for a specific payout block.
+    mapping (uint256 => mapping (address => uint256)) public paid;
 
     // Chainlink address for the underlying token.
     address public uTokenLink;
@@ -48,16 +51,16 @@ contract arShield {
     IOracle public oracle;
     // The armorToken that this shield issues.
     IArmorToken public arToken;
-    // Used for universal variables (all shields) such as bonus for liquidation.
-    IController public controller;
     // Coverage bases that we need to be paying.
     ICovBase[] public covBases;
+    // Used for universal variables (all shields) such as bonus for liquidation.
+    IController public controller;
 
+    event Unlocked(uint256 timestamp);
+    event Locked(address reporter, uint256 timestamp);
+    event HackConfirmed(uint256 payoutBlock, uint256 timestamp);
     event Mint(address indexed user, uint256 amount, uint256 timestamp);
     event Redemption(address indexed user, uint256 amount, uint256 timestamp);
-    event Locked(address reporter, uint256 timestamp);
-    event Unlocked(uint256 timestamp);
-    event HackConfirmed(uint256 payoutBlock, uint256 timestamp);
 
     modifier onlyGov 
     {
@@ -81,17 +84,23 @@ contract arShield {
     receive() external payable {}
     
     /**
-     * @dev Initialize the contract
+     * @dev Controller immediately initializes contract with this.
+     * @param _oracle Address of our oracle for this family of tokens.
      * @param _pToken The protocol token we're protecting.
+     * @param _arToken The Armor token that the vault controls.
+     * @param _uTokenLink ChainLink contract for the underlying token.
+     * @param _beneficiary Address that will receive excess tokens and automatic referral.
+     * @param _fees Mint/redeem fees for each coverage base.
+     * @param _covBases Addresses of the coverage bases to pay for coverage.
     **/
     function initialize(
-        address _arToken,
-        address _pToken, 
-        address _uTokenLink, 
         address _oracle,
+        address _pToken,
+        address _arToken,
+        address _uTokenLink, 
         address payable _beneficiary,
-        address[] calldata _covBases,
-        uint256[] calldata _fees
+        uint256[] calldata _fees,
+        address[] calldata _covBases
     )
       external
     {
@@ -214,10 +223,9 @@ contract arShield {
     {
         // Find balance at the payout block, multiply by the amount per token to pay, subtract anything paid.
         uint256 balance = arToken.balanceOfAt(msg.sender, payoutBlock);
-        uint256 amount = (payoutAmt
-                          * balance 
-                          / 1 ether) 
-                          - paid[payoutBlock][msg.sender];
+        uint256 amount = payoutAmt
+                         * (balance - paid[payoutBlock][msg.sender])
+                         / 1 ether;
 
         require(balance > 0 && amount > 0, "Sender did not have funds on payout block.");
         paid[payoutBlock][msg.sender] += amount;
@@ -357,14 +365,14 @@ contract arShield {
                    / _ethOwed;
 
         // Ether value of all of the contract minus what we're liquidating.
-        ethValue = (pToken.balanceOf( address(this) )
-                    - tokensOut)
+        ethValue = (pToken.balanceOf( address(this) ) - tokensOut)
                    * _ethOwed
                    / _tokensOwed;
     }
 
     /**
      * @dev Find total amount of tokens to be liquidated.
+     * @return totalOwed Total amount of tokens owed in fees.
     **/
     function totalLiqAmts()
       public
@@ -382,6 +390,9 @@ contract arShield {
     /**
      * @dev Find the fee for deposit and withdrawal.
      * @param _pAmount The amount of pTokens to find the fee of.
+     * @return totalFee coverage + mint fees + liquidator bonus + referral fee.
+     * @return refFee Referral fee.
+     * @return newFees New fees to save in feesToLiq.
     **/
     function _findFees(
         uint256 _pAmount
@@ -411,8 +422,7 @@ contract arShield {
         totalFee += refFee;
 
         // Add liquidator bonus.
-        uint256 liqBonus = (totalFee
-                           - refFee) 
+        uint256 liqBonus = (totalFee - refFee) 
                            * controller.bonus()
                            / DENOMINATOR;
         totalFee += liqBonus;
@@ -492,14 +502,14 @@ contract arShield {
      *      Although it's not a likely scenario, the reason we put amounts in here
      *      is to avoid a bad actor sending a bit to a legitimate holder and having their
      *      full balance banned from receiving a payout.
+     * @param _payoutBlock The block at which the hack occurred.
      * @param _users List of users to ban from receiving payout.
      * @param _amounts Bad amounts (in Ether) that the user should not be paid.
-     * @param _payoutBlock The block at which the hack occurred.
     **/
     function banPayout(
+        uint256 _payoutBlock,
         address[] calldata _users,
-        uint256[] calldata _amounts,
-        uint256 _payoutBlock
+        uint256[] calldata _amounts
     )
       external
       onlyGov

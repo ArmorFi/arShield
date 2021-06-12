@@ -9,6 +9,11 @@ contract MockCovBase {
 
     uint256 owed;
 
+    constructor(
+        address _controller
+    )
+    {}
+
     function getShieldOwed(
         address _shield
     )
@@ -28,6 +33,25 @@ contract MockCovBase {
       external
     {
         owed = _newOwed;
+    }
+
+    function editShield(
+        address _proxy,
+        bool _thing
+    )
+      external
+    {
+        _proxy;
+        _thing;
+    }
+
+    function updateShield(
+        uint256 _ethValue
+    )
+      external
+      payable
+    {
+        _ethValue;
     }
 
 }

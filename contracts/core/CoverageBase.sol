@@ -10,6 +10,7 @@ contract CoverageBase is ArmorClient {
     
     // Denominator for coverage percent.
     uint256 public constant DENOMINATOR = 1000;
+
     // The protocol that this contract purchases coverage for.
     address public protocol;
     // Percent of funds from shields to cover.
@@ -24,8 +25,10 @@ contract CoverageBase is ArmorClient {
     uint256 public lastUpdate;
     // Total Ether value to be protecting in the contract.
     uint256 public totalEthValue;
+  
     // Value in Ether and last updates of each shield vault.
     mapping (address => ShieldStats) public shieldStats;
+
     // Controller holds governance contract.
     IController public controller;
     
@@ -83,7 +86,9 @@ contract CoverageBase is ArmorClient {
         
         // Determine how much the shield owes for the last period.
         uint256 owed = getShieldOwed(msg.sender);
-        uint256 unpaid = owed <= msg.value ? 0 : owed - msg.value;
+        uint256 unpaid = owed <= msg.value ? 
+                         0 
+                         : owed - msg.value;
 
         totalEthValue = totalEthValue 
                         - uint256(stats.ethValue)
@@ -102,6 +107,7 @@ contract CoverageBase is ArmorClient {
     /**
      * @dev CoverageBase tells shield what % of current coverage it must pay.
      * @param _shield Address of the shield to get owed amount for.
+     * @return owed Amount of Ether that the shield owes for past coverage.
     **/
     function getShieldOwed(
         address _shield
@@ -119,10 +125,10 @@ contract CoverageBase is ArmorClient {
         uint256 currentDiff = costPerEth * ( block.timestamp - uint256(lastUpdate) );
         
         owed = uint256(stats.ethValue) 
-                * pastDiff
-                + uint256(stats.ethValue)
-                * currentDiff
-                + uint256(stats.unpaid);
+               * pastDiff
+               + uint256(stats.ethValue)
+               * currentDiff
+               + uint256(stats.unpaid);
     }
     
     /**
@@ -132,7 +138,9 @@ contract CoverageBase is ArmorClient {
       internal
     {
         cumCost += costPerEth * (block.timestamp - lastUpdate);
-        costPerEth = totalCost * 1 ether / totalEthValue;
+        costPerEth = totalCost 
+                     * 1 ether 
+                     / totalEthValue;
         lastUpdate = block.timestamp;
     }
     
@@ -146,7 +154,9 @@ contract CoverageBase is ArmorClient {
         uint256
     )
     {
-        return totalEthValue * coverPct / DENOMINATOR;
+        return totalEthValue 
+               * coverPct 
+               / DENOMINATOR;
     }
     
     /**
@@ -175,7 +185,11 @@ contract CoverageBase is ArmorClient {
       onlyGov
     {
         // If active, set timestamp of last update to now, else delete.
-        if (_active) shieldStats[_shield] = ShieldStats( uint128(cumCost), 0, uint128(block.timestamp), 0 );
+        if (_active) shieldStats[_shield] = ShieldStats( 
+                                              uint128(cumCost), 
+                                              0, 
+                                              uint128(block.timestamp), 
+                                              0 );
         else delete shieldStats[_shield]; 
     }
     

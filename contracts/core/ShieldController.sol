@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: MIT
-
 pragma solidity 0.8.4;
 
 import './ArmorToken2.sol';
@@ -18,7 +17,7 @@ contract ShieldController is Governable {
     // Amount that needs to be deposited to lock the contract.
     uint256 public depositAmt;
     // List of all arShields
-    address[] public arShields;
+    address[] private arShields;
 
     constructor(
         uint256 _bonus,
@@ -34,16 +33,24 @@ contract ShieldController is Governable {
 
     /**
      * @dev Create a new arShield from an already-created family.
+     * @param _name Name of the armorToken to be created.
+     * @param _symbol Symbol of the armorToken to be created.
+     * @param _oracle Address of the family's oracle contract to find token value.
+     * @param _pToken Protocol token that the shield will use.
+     * @param _uTokenLink Address of the ChainLink contract for the underlying token.
+     * @param _masterCopy Mastercopy for the arShield proxy.
+     * @param _fees Mint/redeem fee for each coverage base.
+     * @param _covBases Coverage bases that the shield will subscribe to.
     **/
     function createShield(
         string calldata _name,
         string calldata _symbol,
-        address _masterCopy,
+        address _oracle,
         address _pToken,
         address _uTokenLink,
-        address _oracle,
-        address[] calldata _covBases,
-        uint256[] calldata _fees
+        address _masterCopy,
+        uint256[] calldata _fees,
+        address[] calldata _covBases
     )
       external
       onlyGov
