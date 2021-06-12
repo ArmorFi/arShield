@@ -33,7 +33,7 @@ describe("arShield", function () {
     controller = await CONTROLLER.deploy(50, 10000, ETHER.mul(10));
     const SHIELD = await ethers.getContractFactory("arShield");
     masterCopy = await SHIELD.deploy();
-    const COVBASE = await ethers.getContractFactory("CoverageBase");
+    const COVBASE = await ethers.getContractFactory("MockCovBase");
     covBase = await COVBASE.deploy(controller.address);
     //const ORACLE = await ethers.getContractFactory("YearnOracle");
     const ORACLE = await ethers.getContractFactory("MockYearn");
@@ -98,7 +98,7 @@ describe("arShield", function () {
 
   });
 
-  describe.only("#redeem", function () {
+  describe("#redeem", function () {
 
     beforeEach(async function() {
       await pToken.approve( arShield.address, ETHER.mul(100000) );
@@ -144,26 +144,65 @@ describe("arShield", function () {
         expect(diff).to.be.equal("990000125156250000000");
 
         let pBal = await pToken.balanceOf(arShield.address);
-        console.log(pBal.toString());
       });
 
   });
 
-  describe("#liquidate", function () {
+  describe.only("#liquidate", function () {
 
     beforeEach(async function() {
       await pToken.approve( arShield.address, ETHER.mul(100000) );
       await arShield.mint(ETHER.mul(1000), ZERO_ADDY);
-      await pToken.connect(user).approve( arShield.address, ETHER.mul(1000) );
+      await oracle.changeEthOwed(ETHER);
     });
-    
-      it("should return correct amount on liqAmts", async function() {
 
+      it("should return correct amounts on liqAmts", async function() {
+        let liqAmt = await arShield.liqAmts(0);
+        expect(liqAmt).to.be.equal("1000000000000000000");
       });
 
       it("should return correct amounts on payAmts", async function() {
 
       });
+
+      it("should liquidate full liqAmts with 0 tokens owed, send to covBase, adjust liqAmts", async function() {
+        await arShield.liquidate(0, {value: ETHER});
+
+        let testBal = await arShield.getBalance();
+        console.log(testBal.toString());
+
+        let bal = await pToken.balanceOf( gov.getAddress() );
+        expect(bal).to.be.equal("899002512500000000000000");
+        let shieldBal = await arShield.getBalance();
+        expect(shieldBal).to.be.equal("0")
+        let covBal = await arShield.getBalance();
+        expect(covBal).to.be.equal("1000000000000000000")
+
+        let liqAmt = await arShield.feesToLiq(0);
+        expect(liqAmt).to.be.equal(0);
+      });
+
+      it("should liquidate half of liqAmts with 0 tokens owed", async function() {
+        await arShield.liquidate(0, {value: ETHER.div(2)});
+        let bal = await pToken.balanceOf( gov.getAddress() );
+        expect(bal).to.be.equal("899001256250000000000000");
+      });      
+
+      it("should liquidate with protocol fees", async function() {
+        await covBase.changeEthOwed(ETHER.div(10));
+        // 10 tokens given the value of 0.1 ETHER
+        await oracle.changeTokensOwed(ETHER.mul(10));
+
+        // really annoying calculations to find out how much the mint fees are worth
+        let mintFee = ETHER.div(10).mul(1000).div(400).add(ETHER.mul(1000).div(400).div(200));
+        console.log(mintFee);
+
+        await arShield.liquidate(0, {value: ETHER})
+      });
+
+      it("should fail on too much Ether", async function() {
+        await expect(arShield.liquidate(0, {value: ETHER.mul(2)})).to.be.revertedWith("Too much Ether paid.");
+      });     
 
       it("should update and deposit on cov base", async function() {
 

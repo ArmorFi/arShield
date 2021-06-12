@@ -39,9 +39,6 @@ contract arShield {
     mapping (address => address) public referrers;
     mapping (address => uint256) public refBals;
     uint256 public refTotal;
-    // Fee to pay referrers as % of protocol fees. 10000 == 100%.
-    // If protocol fees are 0.1% and refFee is 10000, refFee is 0.1%.
-    uint256 public refFee;
 
     // Chainlink address for the underlying token.
     address public uTokenLink;
@@ -99,12 +96,13 @@ contract arShield {
       external
     {
         require(address(arToken) == address(0), "Contract already initialized.");
-        arToken = IArmorToken(_arToken);
-        pToken = IERC20(_pToken);
         uTokenLink = _uTokenLink;
-        oracle = IOracle(_oracle);
-        controller = IController(msg.sender);
         beneficiary = _beneficiary;
+
+        pToken = IERC20(_pToken);
+        oracle = IOracle(_oracle);
+        arToken = IArmorToken(_arToken);
+        controller = IController(msg.sender);
 
         // CovBases and fees must always be the same length.
         require(_covBases.length == _fees.length, "Improper length array.");
@@ -127,40 +125,57 @@ contract arShield {
       external
       notLocked
     {
-        if ( referrers[msg.sender] == address(0) ) referrers[msg.sender] = _referrer == address(0) ? beneficiary : _referrer;
+        address user = msg.sender;
+        if ( referrers[user] == address(0) ) {
+            referrers[user] = _referrer == address(0) ? beneficiary : _referrer;
+        }
 
         // fee is total including refFee
-        (uint256 fee, uint256 refFee, uint256[] memory newFees) = findFees(_pAmount);
+        (
+         uint256 fee, 
+         uint256 refFee, 
+         uint256[] memory newFees
+        ) = _findFees(_pAmount);
+
         uint256 arAmount = arValue(_pAmount - fee);
+        pToken.transferFrom(user, address(this), _pAmount);
+        arToken.mint(user, arAmount);
+        _saveFees(newFees, refFee);
 
-        pToken.transferFrom(msg.sender, address(this), _pAmount);
-        arToken.mint(msg.sender, arAmount);
-        saveFees(newFees, refFee);
-
-        emit Mint(msg.sender, arAmount, block.timestamp);
+        emit Mint(user, arAmount, block.timestamp);
     }
 
+    /**
+     * @dev Redeem arTokens for underlying pTokens.
+     * @param _arAmount Amount of arTokens to redeem.
+    **/
     function redeem(
         uint256 _arAmount
     )
       external
     {
+        address user = msg.sender;
         uint256 pAmount = pValue(_arAmount);
-        arToken.transferFrom(msg.sender, address(this), _arAmount);
+        arToken.transferFrom(user, address(this), _arAmount);
         arToken.burn(_arAmount);
         
-        (uint256 fee, uint256 refFee, uint256[] memory newFees) = findFees(pAmount);
-        pToken.transfer(msg.sender, pAmount - fee);
-        saveFees(newFees, refFee);
+        (
+         uint256 fee, 
+         uint256 refFee, 
+         uint256[] memory newFees
+        ) = _findFees(pAmount);
 
-        emit Redemption(msg.sender, _arAmount, block.timestamp);
+        pToken.transfer(user, pAmount - fee);
+        _saveFees(newFees, refFee);
+
+        emit Redemption(user, _arAmount, block.timestamp);
     }
 
     /**
      * @dev Liquidate for payment for coverage by selling to people at oracle price.
     **/
     function liquidate(
-        uint256 covId
+        uint256 _covId
     )
       external
       payable
@@ -168,12 +183,12 @@ contract arShield {
         // Get full amounts for liquidation here.
         (
          uint256 ethOwed, 
-         uint256 tokenValue, 
          uint256 tokensOwed,
          uint256 tokenFees
-        ) = liqAmts(covId);
+        ) = liqAmts(_covId);
+        require(msg.value <= ethOwed, "Too much Ether paid.");
 
-        // determine eth value and amount of tokens to pay?
+        // Determine eth value and amount of tokens to pay?
         (
          uint256 tokensOut,
          uint256 feesPaid,
@@ -181,13 +196,12 @@ contract arShield {
         ) = payAmts(
             msg.value,
             ethOwed,
-            tokenValue,
             tokensOwed,
             tokenFees
         );
 
-        covBases[covId].updateShield{value: msg.value}(ethValue);
-        feesToLiq[covId] -= feesPaid;
+        covBases[_covId].updateShield{value:msg.value}(ethValue);
+        feesToLiq[_covId] -= feesPaid;
         pToken.transfer(msg.sender, tokensOut);
     }
 
@@ -273,34 +287,39 @@ contract arShield {
 
     /**
      * @dev Amounts owed to be liquidated.
+     * @param _covId Coverage Base ID lol
      * @return ethOwed Amount of Ether owed to coverage base.
-     * @return tokenValue Amount of tokens owed to liquidator for that Ether.
      * @return tokensOwed Amount of tokens owed to liquidator for that Ether.
      * @return tokenFees Amount of tokens owed to liquidator for that Ether.
     **/
-    function liqAmts(uint256 covId)
+    function liqAmts(
+        uint256 _covId
+    )
       public
       view
     returns(
         uint256 ethOwed,
-        uint256 tokenValue,
         uint256 tokensOwed,
         uint256 tokenFees
     )
     {
         // Find amount owed in Ether, find amount owed in protocol tokens.
-        ethOwed = covBases[covId].getShieldOwed( address(this) );
-        tokensOwed = oracle.getTokensOwed(ethOwed, address(pToken), uTokenLink);
+        // If nothing is owed to coverage base, don't use getTokensOwed.
+        ethOwed = covBases[_covId].getShieldOwed( address(this) );
+        if (ethOwed > 0) {
+            tokensOwed = oracle.getTokensOwed(ethOwed, address(pToken), uTokenLink);
+        }
 
-        tokenFees = feesToLiq[covId];
+        tokenFees = feesToLiq[_covId];
         tokensOwed += tokenFees;
+        require(tokensOwed > 0, "No fees are owed.");
 
         // Find the Ether value of the mint fees we have.
-        uint256 ethFees = tokensOwed > 0
-                          ? ethOwed 
-                          * tokenFees 
-                          / tokensOwed
-                          : 0;
+        uint256 ethFees = ethOwed > 0 ?
+                            ethOwed
+                            * tokenFees
+                            / tokensOwed
+                          : oracle.getEthOwed(tokenFees, address(pToken), uTokenLink);
         ethOwed += ethFees;
 
         // Add a bonus for liquidators (0.5% to start).
@@ -316,7 +335,6 @@ contract arShield {
     function payAmts(
         uint256 _ethIn,
         uint256 _ethOwed,
-        uint256 _tokenValue,
         uint256 _tokensOwed,
         uint256 _tokenFees
     )
@@ -340,9 +358,9 @@ contract arShield {
 
         // Ether value of all of the contract minus what we're liquidating.
         ethValue = (pToken.balanceOf( address(this) )
-                   - _tokensOut)
+                    - tokensOut)
                    * _ethOwed
-                   / _tokenValue;
+                   / _tokensOwed;
     }
 
     /**
@@ -356,7 +374,7 @@ contract arShield {
     )
     {
         for (uint256 i = 0; i < covBases.length; i++) {
-            (/*ethOwed*/, /*tokenValue*/, uint256 tokensOwed, /*tokenFees*/) = liqAmts(i);
+            (/*ethOwed*/, uint256 tokensOwed, /*tokenFees*/) = liqAmts(i);
             totalOwed += tokensOwed;
         }
     }
@@ -365,7 +383,7 @@ contract arShield {
      * @dev Find the fee for deposit and withdrawal.
      * @param _pAmount The amount of pTokens to find the fee of.
     **/
-    function findFees(
+    function _findFees(
         uint256 _pAmount
     )
       internal
@@ -405,7 +423,7 @@ contract arShield {
      * @param liqFees Fees associated with depositing to a coverage base.
      * @param _refFee Fee given to the address that referred this user.
     **/
-    function saveFees(
+    function _saveFees(
         uint256[] memory liqFees,
         uint256 _refFee
     )
@@ -444,8 +462,8 @@ contract arShield {
       external
       onlyGov
     {
-        // TODO: change to safe transfer
-        payable(depositor).transfer( controller.depositAmt() );
+        // low-level call to avoid push problems
+        payable(depositor).call{value: controller.depositAmt()}("");
         delete depositor;
         payoutBlock = _payoutBlock;
         payoutAmt = _payoutAmt;
@@ -512,7 +530,9 @@ contract arShield {
       notLocked
     {
         if ( _token == address(0) ) beneficiary.transfer( address(this).balance );
-        else if ( _token != address(pToken) ) IERC20(_token).transfer( beneficiary, IERC20(_token).balanceOf( address(this) ) );
+        else if ( _token != address(pToken) ) {
+            IERC20(_token).transfer( beneficiary, IERC20(_token).balanceOf( address(this) ) );
+        }
     }
 
 }

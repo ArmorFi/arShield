@@ -35,6 +35,34 @@ contract YearnOracle {
     }
     
     /**
+     * @dev Get the Ether owed for an amount of tokens that must be paid for.
+     * @param _tokensOwed Amounts of tokens to find value of.
+     * @param _yToken Address of the Yearn token that value is being found for.
+     * @param _uTokenLink ChainLink address for the underlying token.
+    **/
+    function getEthOwed(
+        uint256 _tokensOwed,
+        address _yToken,
+        address _uTokenLink
+    )
+      external
+      view
+    returns(
+        uint256 ethOwed
+    )
+    {
+        uint256 yPerU = uToY(_yToken, 1 ether);
+        uint256 ethPerU = _findEthPerToken(_uTokenLink);
+        uint256 ethPerY = yPerU
+                          * ethPerU
+                          / 1 ether;
+
+        ethOwed = _tokensOwed
+                  * ethPerY
+                  / 1 ether;
+    }
+
+    /**
      * @dev Ether amount to underlying token owed.
      * @param _ethOwed Amount of Ether owed to the coverage base.
      * @param _uTokenLink Chainlink oracle address for the underlying token.

@@ -8,7 +8,8 @@ pragma solidity 0.8.4;
 contract MockYearn {
 
     // Mock can change this to check different scenarios.
-    uint256 public owed;
+    uint256 public tokensOwed;
+    uint256 public ethOwed;
 
     function getTokensOwed(
         uint256 _ethOwed,
@@ -18,21 +19,46 @@ contract MockYearn {
       external
       view
     returns(
-        uint256 tokensOwed
+        uint256 owed
     )
     {
-        tokensOwed = owed;
+        owed = tokensOwed;
         _ethOwed;
         _pToken;
         _uTokenLink;
     }
 
-    function changeOwed(
+    function getEthOwed(
+        uint256 _tokensOwed,
+        address _pToken,
+        address _uTokenLink
+    )
+      external
+      view
+    returns(
+        uint256 owed
+    )
+    {
+        owed = ethOwed;
+        _tokensOwed;
+        _pToken;
+        _uTokenLink;
+    }
+
+    function changeTokensOwed(
         uint256 _newOwed
     )
       external
     {
-        owed = _newOwed;
+        tokensOwed = _newOwed;
+    }
+
+    function changeEthOwed(
+        uint256 _newOwed
+    )
+      external
+    {
+        ethOwed = _newOwed;
     }
 
 }
