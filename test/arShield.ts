@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 import { Contract, Signer, BigNumber, constants } from "ethers";
-import { increase, getTimestamp } from "./utils";
+import { increase, getTimestamp, mine } from "./utils";
 import { Address } from "ethereumjs-util";
 import { hasUncaughtExceptionCaptureCallback } from "process";
 const ETHER = BigNumber.from("1000000000000000000");
@@ -62,7 +62,7 @@ describe("arShield", function () {
     arToken = await ethers.getContractAt("IArmorToken", arTokenAddress);
   });
 
-  describe.only("#mint", function () {
+  describe("#mint", function () {
 
     beforeEach(async function() {
       await pToken.approve( arShield.address, ETHER.mul(100000) );
@@ -87,7 +87,6 @@ describe("arShield", function () {
         let firstBal = await user.getBalance();
         let pendingMint = await arShield.connect(user).mint(ETHER.mul(1000), ZERO_ADDY);
         let lastBal = await user.getBalance();
-        console.log(firstBal.sub(lastBal).toString());
       });
       
       it("should mint correctly with pTokens in contract", async function(){
@@ -115,7 +114,7 @@ describe("arShield", function () {
         let balance = await pToken.balanceOf( gov.getAddress() );
         let arBal = await arToken.balanceOf( gov.getAddress() );
         
-        await arShield.redeem(arBal);
+        await arShield.redeem(arBal, ZERO_ADDY);
         
         let endBal = await pToken.balanceOf( gov.getAddress() );
         let arBalance = await arToken.balanceOf( gov.getAddress() );
@@ -138,7 +137,7 @@ describe("arShield", function () {
         let arBal = await arToken.balanceOf( user.getAddress() );
 
         await arToken.connect(user).approve( arShield.address, ETHER.mul(100000) );
-        await arShield.connect(user).redeem(arBal);
+        await arShield.connect(user).redeem(arBal, ZERO_ADDY);
         
         let endBal = await pToken.balanceOf( user.getAddress() );
         let arBalance = await arToken.balanceOf( user.getAddress() );
@@ -175,10 +174,6 @@ describe("arShield", function () {
         expect(liqAmt[2]).to.be.equal(tokenFees);
       });
 
-      it("should return correct amounts on payAmts", async function() {
-
-      });
-
       it("should liquidate full liqAmts with 0 tokens owed, send to covBase, adjust liqAmts", async function() {
         await arShield.liquidate(0, {value: ETHER});
 
@@ -210,10 +205,6 @@ describe("arShield", function () {
 
       it("should fail on too much Ether", async function() {
         await expect(arShield.liquidate(0, {value: ETHER.mul(2)})).to.be.revertedWith("Too much Ether paid.");
-      });     
-
-      it("should work with multiple cov bases", async function() {
-
       });
 
   });
@@ -223,7 +214,6 @@ describe("arShield", function () {
     beforeEach(async function() {
       await pToken.approve( arShield.address, ETHER.mul(100000) );
       await arShield.mint(ETHER.mul(1000), ZERO_ADDY);
-      await pToken.connect(user).approve( arShield.address, ETHER.mul(1000) );
     });
     
       it("should pause upon correct deposit and set correct variables", async function() {
@@ -237,17 +227,40 @@ describe("arShield", function () {
       });
 
       it("should set correct variables upon confirmation", async function() {
+        await arShield.notifyHack({value:ETHER.mul(10)});
         await arShield.connect(gov).confirmHack(69,420);
-        await expect(arShield.payoutBlock()).to.be.equal(69);
-        await expect(arShield.payoutAmt()).to.be.equal(420);
+        expect(await arShield.payoutBlock()).to.be.equal(69);
+        expect(await arShield.payoutAmt()).to.be.equal(420);
       });
 
       it("should be able to ban payouts from users", async function() {
-        await arShield.banPayouts( [referrer.getAddress()] )
+        // Notify of hack, load contract with Ether.
+        await arShield.notifyHack({value:ETHER.mul(10)});
+        await gov.sendTransaction({'to':arShield.address, 'value':ETHER});
+        let arBalance = await arToken.balanceOf( gov.getAddress() )
+
+        let block = await gov.provider.getBlockNumber();
+        await mine();
+        // Banning full balance of the user
+        await arShield.banPayouts(block, [gov.getAddress()], [arBalance] )
+        await arShield.connect(gov).confirmHack(block, arBalance);
+
+        await expect(arShield.connect(gov).claim()).to.be.revertedWith("Sender did not have funds on payout block.");
       });
 
       it("should be able to claim funds", async function() {
+        // Notify of hack, load contract with Ether.
+        await arShield.notifyHack({value:ETHER.mul(10)});
+        await gov.sendTransaction({'to':arShield.address, 'value':ETHER});
 
+        let block = await gov.provider.getBlockNumber();
+        await mine();
+        // 0.001 ether per token
+        await arShield.connect(gov).confirmHack(block,1000000000000000);
+        
+        await arShield.connect(gov).claim();
+        let balance = await gov.getBalance();
+        expect(balance).to.be.equal("999984648256500000000000");
       });
   
       it("should be able to unlock contract", async function() {
@@ -257,7 +270,7 @@ describe("arShield", function () {
       });
 
       it("should not be able to unlock if not gov", async function() {
-        expect(await arShield.connect(user).unlock()).to.be.revertedWith("You may not do this while the contract is unlocked.");
+        await expect(arShield.connect(user).unlock()).to.be.revertedWith("You may not do this while the contract is unlocked.");
       });
 
   });
@@ -293,6 +306,11 @@ describe("arShield", function () {
 
   describe("#miscellaneous", function () {
 
+    beforeEach(async function() {
+      await pToken.approve( arShield.address, ETHER.mul(100000) );
+      await arShield.mint(ETHER.mul(1000), ZERO_ADDY);
+    });
+
     it("should be able to change fees", async function() {
       await arShield.connect(gov).changeFees([50]);
       let fee = await arShield.feePerBase(0);
@@ -315,7 +333,5 @@ describe("arShield", function () {
     });
 
   });
-
-  // multiple cov base differences
 
 });

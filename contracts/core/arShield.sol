@@ -331,9 +331,7 @@ contract arShield {
         // Find amount owed in Ether, find amount owed in protocol tokens.
         // If nothing is owed to coverage base, don't use getTokensOwed.
         ethOwed = covBases[_covId].getShieldOwed( address(this) );
-        if (ethOwed > 0) {
-            tokensOwed = oracle.getTokensOwed(ethOwed, address(pToken), uTokenLink);
-        }
+        if (ethOwed > 0) tokensOwed = oracle.getTokensOwed(ethOwed, address(pToken), uTokenLink);
 
         tokenFees = feesToLiq[_covId];
         tokensOwed += tokenFees;
@@ -556,6 +554,7 @@ contract arShield {
         uint256 _payoutAmt
     )
       external
+      isLocked
       onlyGov
     {
         // low-level call to avoid push problems
@@ -604,9 +603,9 @@ contract arShield {
      *      full balance banned from receiving a payout.
      * @param _payoutBlock The block at which the hack occurred.
      * @param _users List of users to ban from receiving payout.
-     * @param _amounts Bad amounts (in Ether) that the user should not be paid.
+     * @param _amounts Bad amounts (in arToken wei) that the user should not be paid.
     **/
-    function banPayout(
+    function banPayouts(
         uint256 _payoutBlock,
         address[] calldata _users,
         uint256[] calldata _amounts
