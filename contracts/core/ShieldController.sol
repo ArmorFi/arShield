@@ -64,13 +64,13 @@ contract ShieldController is Governable {
         address token = address( new ArmorToken(proxy, _name, _symbol) );
         
         IarShield(proxy).initialize(
-            token,
-            _pToken,
-            _uTokenLink,
             _oracle,
+            _pToken,
+            token,
+            _uTokenLink,
             payable(msg.sender),
-            _covBases,
-            _fees
+            _fees,
+            _covBases
         );
         
         for(uint256 i = 0; i < _covBases.length; i++) ICovBase(_covBases[i]).editShield(proxy, true);

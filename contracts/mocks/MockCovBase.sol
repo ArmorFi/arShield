@@ -8,6 +8,7 @@ pragma solidity 0.8.4;
 contract MockCovBase {
 
     uint256 owed;
+    bool allowed;
 
     constructor(
         address _controller
@@ -35,11 +36,33 @@ contract MockCovBase {
         owed = _newOwed;
     }
 
+    function checkCoverage(
+        uint256 _ethValue
+    )
+      external
+      view
+    returns(
+        bool
+    )
+    {
+        _ethValue;
+        return allowed;
+    }
+
+    function changeAllowed(
+        bool _newAllowed
+    )
+      external
+    {
+        allowed = _newAllowed;
+    }
+
     function editShield(
         address _proxy,
         bool _thing
     )
       external
+      pure
     {
         _proxy;
         _thing;

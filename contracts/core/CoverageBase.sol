@@ -51,6 +51,8 @@ contract CoverageBase is ArmorClient {
         _;
     }
     
+    // TODO: Must add check coverage for capped vaults
+
     /**
      * @dev Just used to set the controller for the coverage base.
      * @param _controller ShieldController proxy address.
@@ -154,7 +156,7 @@ contract CoverageBase is ArmorClient {
     function getCoverage()
       public
       view
-    returns (
+    returns(
         uint256
     )
     {
@@ -169,13 +171,35 @@ contract CoverageBase is ArmorClient {
     function getCoverageCost()
       public
       view
-    returns (
+    returns(
         uint256
     )
     {
         return ArmorCore.calculatePricePerSec( protocol, getCoverage() );
     }
     
+    /**
+     * @dev Check whether a new Ether value is available for purchase.
+     * @param _newEthValue The new Ether value of the shield.
+     * @return allowed True if we may purchase this much more coverage.
+    **/
+    function checkCoverage(
+      uint256 _newEthValue
+    )
+      public
+      view
+    returns(
+      bool allowed
+    )
+    {
+      uint256 desired = (totalEthValue 
+                         + _newEthValue
+                         - uint256(shieldStats[msg.sender].ethValue) )
+                        * coverPct
+                        / DENOMINATOR;
+      allowed = ArmorCore.availableCover( protocol, desired ) == desired;
+    }
+
     /**
      * @dev Either add or delete a shield.
      * @param _shield Address of the shield to edit.

@@ -19,6 +19,8 @@ contract arShield {
     // Denominator for % fractions.
     uint256 constant DENOMINATOR = 10000;
     
+    // Whether or not the pool has capped coverage.
+    bool public capped;
     // Whether or not the contract is locked.
     bool public locked;
     // Address that will receive default referral fees and excess eth/tokens.
@@ -35,6 +37,8 @@ contract arShield {
     uint256[] public feesToLiq;
     // Different amounts to charge as a fee for each protocol.
     uint256[] public feePerBase;
+    // Total tokens to protect in the vault (tokens - fees).
+    uint256 public totalTokens;
 
     // referral => referrer
     mapping (address => address) public referrers;
@@ -136,22 +140,27 @@ contract arShield {
       notLocked
     {
         address user = msg.sender;
-        if ( referrers[user] == address(0) ) {
-            referrers[user] = _referrer == address(0) ? beneficiary : _referrer;
-        }
+        _setReferrer(user, _referrer);
 
         // fee is total including refFee
         (
          uint256 fee, 
          uint256 refFee, 
+         uint256 totalFees,
          uint256[] memory newFees
         ) = _findFees(_pAmount);
 
         uint256 arAmount = arValue(_pAmount - fee);
         pToken.transferFrom(user, address(this), _pAmount);
-        arToken.mint(user, arAmount);
         _saveFees(newFees, refFee);
 
+        // If this vault is capped in its coverage, we check whether the mint should be allowed.
+        // After that we update to keep cap checking up-to-date.
+        uint256 ethValue = getEthValue(pToken.balanceOf( address(this) ) - totalFees);
+        if (capped) require(checkCapped(ethValue), "Not enough coverage available.");
+        for (uint256 i = 0; i < covBases.length; i++) covBases[i].updateShield(ethValue);
+
+        arToken.mint(user, arAmount);
         emit Mint(user, arAmount, block.timestamp);
     }
 
@@ -167,9 +176,7 @@ contract arShield {
       external
     {
         address user = msg.sender;
-        if ( referrers[user] == address(0) ) {
-            referrers[user] = _referrer == address(0) ? beneficiary : _referrer;
-        }
+        _setReferrer(user, _referrer);
 
         uint256 pAmount = pValue(_arAmount);
         arToken.transferFrom(user, address(this), _arAmount);
@@ -177,12 +184,19 @@ contract arShield {
         
         (
          uint256 fee, 
-         uint256 refFee, 
+         uint256 refFee,
+         uint256 totalFees,
          uint256[] memory newFees
         ) = _findFees(pAmount);
 
         pToken.transfer(user, pAmount - fee);
         _saveFees(newFees, refFee);
+
+        // update shield values so coverage will be updated immediately.
+        //if (capped) {
+        uint256 ethValue = getEthValue(pToken.balanceOf( address(this) ) - totalFees);
+        for (uint256 i = 0; i < covBases.length; i++) covBases[i].updateShield(ethValue);
+        //}
 
         emit Redemption(user, _arAmount, block.timestamp);
     }
@@ -269,9 +283,7 @@ contract arShield {
         uint256 totalSupply = arToken.totalSupply();
         if (totalSupply == 0) return _arAmount;
 
-        pAmount = (pToken.balanceOf( address(this) ) 
-                   - totalLiqAmts()
-                   - refTotal)
+        pAmount = ( pToken.balanceOf( address(this) ) - totalFeeAmts() )
                   * _arAmount 
                   / totalSupply;
     }
@@ -295,9 +307,7 @@ contract arShield {
 
         arAmount = arToken.totalSupply()
                    * _pAmount 
-                   / (balance
-                      - totalLiqAmts()
-                      - refTotal);
+                   / ( balance - totalFeeAmts() );
     }
 
     /**
@@ -334,7 +344,7 @@ contract arShield {
                             ethOwed
                             * tokenFees
                             / tokensOwed
-                          : oracle.getEthOwed(tokenFees, address(pToken), uTokenLink);
+                          : getEthValue(tokenFees);
         ethOwed += ethFees;
 
         // Add a bonus for liquidators (0.5% to start).
@@ -372,16 +382,18 @@ contract arShield {
                    / _ethOwed;
 
         // Ether value of all of the contract minus what we're liquidating.
-        ethValue = (pToken.balanceOf( address(this) ) - tokensOut)
+        ethValue = (pToken.balanceOf( address(this) ) 
+                    - _tokenFees
+                    - totalFeeAmts())
                    * _ethOwed
                    / _tokensOwed;
     }
 
     /**
-     * @dev Find total amount of tokens to be liquidated.
+     * @dev Find total amount of tokens that are not to be covered (ref fees, tokens to liq, liquidator bonus).
      * @return totalOwed Total amount of tokens owed in fees.
     **/
-    function totalLiqAmts()
+    function totalFeeAmts()
       public
       view
     returns(
@@ -389,16 +401,80 @@ contract arShield {
     )
     {
         for (uint256 i = 0; i < covBases.length; i++) {
-            (/*ethOwed*/, uint256 tokensOwed, /*tokenFees*/) = liqAmts(i);
-            totalOwed += tokensOwed;
+            uint256 ethOwed = covBases[i].getShieldOwed( address(this) );
+            if (ethOwed > 0) totalOwed += oracle.getTokensOwed(ethOwed, address(pToken), uTokenLink);
+            totalOwed += feesToLiq[i];
+        }
+
+        // Add a bonus for liquidators (0.5% to start).
+        uint256 liqBonus = totalOwed 
+                            * controller.bonus()
+                            / DENOMINATOR;
+        totalOwed += liqBonus;
+        totalOwed += refTotal;
+    }
+
+    /**
+     * @dev If the shield requires full coverage, check coverage base to see if it is available.
+     * @param _ethValue Ether value of the new tokens.
+     * @return allowed True if the deposit is allowed.
+    **/
+    function checkCapped(
+        uint256 _ethValue
+    )
+      public
+      view
+    returns(
+        bool allowed
+    )
+    {
+        if (capped) {
+            for(uint256 i = 0; i < covBases.length; i++) {
+                if( !covBases[i].checkCoverage(_ethValue) ) return false;
+            }
+        }
+        allowed = true;
+    }
+
+    /**
+     * Find the Ether value of a certain amount of pTokens.
+     * @param _pAmount The amount of pTokens to find Ether value for.
+     * @return ethValue Ether value of the pTokens (in Wei).
+    **/
+    function getEthValue(
+        uint256 _pAmount
+    )
+      public
+      view
+    returns(
+        uint256 ethValue
+    )
+    {
+        ethValue = oracle.getEthOwed(_pAmount, address(pToken), uTokenLink);
+    }
+
+    /**
+     * @dev Set referrer for a user if they do not have one.
+     * @param _user User making the call.
+     * @param _referrer Referrer to set.
+    **/
+    function _setReferrer(
+        address _user,
+        address _referrer
+    )
+      internal
+    {
+        if ( referrers[_user] == address(0) ) {
+            referrers[_user] = _referrer == address(0) ? beneficiary : _referrer;
         }
     }
 
     /**
      * @dev Find the fee for deposit and withdrawal.
      * @param _pAmount The amount of pTokens to find the fee of.
-     * @return totalFee coverage + mint fees + liquidator bonus + referral fee.
+     * @return userFee coverage + mint fees + liquidator bonus + referral fee.
      * @return refFee Referral fee.
+     * @return totalFees Total fees owed from the contract including referrals (used to calculate amount to cover).
      * @return newFees New fees to save in feesToLiq.
     **/
     function _findFees(
@@ -407,32 +483,35 @@ contract arShield {
       internal
       view
     returns(
-        uint256 totalFee,
+        uint256 userFee,
         uint256 refFee,
+        uint256 totalFees,
         uint256[] memory newFees
     )
     {
         // Find protocol fees for each coverage base.
         newFees = feesToLiq;
         for (uint256 i = 0; i < newFees.length; i++) {
+            totalFees += newFees[i];
             uint256 fee = _pAmount
                           * feePerBase[i]
                           / DENOMINATOR;
             newFees[i] += fee;
-            totalFee += fee;
+            userFee += fee;
         }
 
         // Add referral fee.
-        refFee = totalFee 
+        refFee = userFee 
                  * controller.refFee() 
                  / DENOMINATOR;
-        totalFee += refFee;
+        userFee += refFee;
 
         // Add liquidator bonus.
-        uint256 liqBonus = (totalFee - refFee) 
+        uint256 liqBonus = (userFee - refFee) 
                            * controller.bonus()
                            / DENOMINATOR;
-        totalFee += liqBonus;
+        userFee += liqBonus;
+        totalFees += userFee + refTotal;
     }
 
     /**
@@ -502,6 +581,20 @@ contract arShield {
     }
 
     /**
+     * @dev Funds may be withdrawn to beneficiary if any are leftover after a hack.
+     * @param _token Address of the token to withdraw excess for. Cannot be protocol token.
+    **/
+    function withdrawExcess(address _token)
+      external
+      notLocked
+    {
+        if ( _token == address(0) ) beneficiary.transfer( address(this).balance );
+        else if ( _token != address(pToken) ) {
+            IERC20(_token).transfer( beneficiary, IERC20(_token).balanceOf( address(this) ) );
+        }
+    }
+
+    /**
      * @dev Block a payout if an address minted tokens after a hack occurred.
      *      There are ways people can mess with this to make it annoying to ban people,
      *      but ideally the presence of this function alone will stop malicious minting.
@@ -539,17 +632,16 @@ contract arShield {
     }
 
     /**
-     * @dev Funds may be withdrawn to beneficiary if any are leftover after a hack.
-     * @param _token Address of the token to withdraw excess for. Cannot be protocol token.
+     * @dev Change whether this arShield has a cap on tokens submitted or not.
+     * @param _capped True if there should now be a cap on the vault.
     **/
-    function withdrawExcess(address _token)
+    function changeCapped(
+        bool _capped
+    )
       external
-      notLocked
+      onlyGov
     {
-        if ( _token == address(0) ) beneficiary.transfer( address(this).balance );
-        else if ( _token != address(pToken) ) {
-            IERC20(_token).transfer( beneficiary, IERC20(_token).balanceOf( address(this) ) );
-        }
+        capped = _capped;
     }
 
 }

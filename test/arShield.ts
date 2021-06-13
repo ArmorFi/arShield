@@ -45,13 +45,13 @@ describe("arShield", function () {
     uTokenLink = oracle.address;
 
     await controller.connect(gov).createShield("Armor yDAI", 
-                                                "armorYDAI", 
-                                                masterCopy.address, 
+                                                "armorYDAI",
+                                                oracle.address,
                                                 pToken.address,
                                                 uTokenLink,
-                                                oracle.address,
-                                                [covBase.address],
-                                                [25]
+                                                masterCopy.address, 
+                                                [25],
+                                                [covBase.address]
                                             );
     
     let shields = await controller.getShields();
@@ -62,35 +62,39 @@ describe("arShield", function () {
     arToken = await ethers.getContractAt("IArmorToken", arTokenAddress);
   });
 
-  describe("#mint", function () {
+  describe.only("#mint", function () {
 
     beforeEach(async function() {
       await pToken.approve( arShield.address, ETHER.mul(100000) );
       await pToken.connect(user).approve( arShield.address, ETHER.mul(100000) );
-      await arShield.mint(ETHER.mul(1000));
+      await arShield.mint(ETHER.mul(1000), ZERO_ADDY);
     });
 
-      it("should increase total fees to liquidate", async function(){
-        let totalFees = await arShield.totalLiqAmts();
-        expect(totalFees).to.be.equal( ETHER.mul(25).div(10) );
+      it("should increase total fees", async function(){
+        let totalFees = await arShield.totalFeeAmts();
+        // mint fee + ref fee + liquidator bonus
+        expect(totalFees).to.be.equal("5012500000000000000");
       });
 
       it("should mint 1:1 with no pTokens in contract", async function(){
         let balance = await arToken.balanceOf( gov.getAddress() );
-        expect(balance).to.be.equal(ETHER.mul(9975).div(10));
+        expect(balance).to.be.equal("994987500000000000000");
       });
 
       it("estimate cost", async function(){
-        let pendingMint = arShield.connect(user).mint( ETHER.mul(1000) );
-        let estimate = await user.estimateGas(pendingMint)
-        console.log(estimate.toString());
+        await arShield.connect(gov).changeCapped(true);
+        await covBase.connect(gov).changeAllowed(true);
+        let firstBal = await user.getBalance();
+        let pendingMint = await arShield.connect(user).mint(ETHER.mul(1000), ZERO_ADDY);
+        let lastBal = await user.getBalance();
+        console.log(firstBal.sub(lastBal).toString());
       });
       
       it("should mint correctly with pTokens in contract", async function(){
-        await arShield.connect(user).mint( ETHER.mul(1000) );
+        await arShield.connect(user).mint(ETHER.mul(1000), ZERO_ADDY);
 
         let userAr = await arToken.balanceOf( user.getAddress() );
-        expect(userAr).to.be.equal(ETHER.mul(9975).div(10));
+        expect(userAr).to.be.equal("994987500000000000000");
 
         let shieldBal = await pToken.balanceOf( arShield.address );
         expect(shieldBal).to.be.equal( ETHER.mul(2000) );
@@ -214,7 +218,7 @@ describe("arShield", function () {
 
   });
 
-  describe.only("#hack", function () {
+  describe("#hack", function () {
 
     beforeEach(async function() {
       await pToken.approve( arShield.address, ETHER.mul(100000) );

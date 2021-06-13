@@ -53,6 +53,7 @@ export default {
   networks: {
     hardhat: {
       gas: 10000000,
+      gasPrice: 100000000000,
       accounts: {
         accountsBalance: "1000000000000000000000000"
       },
