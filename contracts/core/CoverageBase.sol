@@ -50,8 +50,6 @@ contract CoverageBase is ArmorClient {
         require(msg.sender == controller.governor() || msg.sender == address(controller), "Sender is not governor.");
         _;
     }
-    
-    // TODO: Must add check coverage for capped vaults
 
     /**
      * @dev Just used to set the controller for the coverage base.
@@ -64,6 +62,8 @@ contract CoverageBase is ArmorClient {
         controller = IController(_controller);
     }
     
+    receive() external payable {}
+
     /**
      * @dev Called by a keeper to update the amount covered by this contract on arCore.
     **/
