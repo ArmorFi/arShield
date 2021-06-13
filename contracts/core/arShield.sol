@@ -140,7 +140,6 @@ contract arShield {
       notLocked
     {
         address user = msg.sender;
-        _setReferrer(user, _referrer);
 
         // fee is total including refFee
         (
@@ -152,13 +151,11 @@ contract arShield {
 
         uint256 arAmount = arValue(_pAmount - fee);
         pToken.transferFrom(user, address(this), _pAmount);
-        _saveFees(newFees, refFee);
+        _saveFees(newFees, _referrer, refFee);
 
         // If this vault is capped in its coverage, we check whether the mint should be allowed.
-        // After that we update to keep cap checking up-to-date.
         uint256 ethValue = getEthValue(pToken.balanceOf( address(this) ) - totalFees);
         if (capped) require(checkCapped(ethValue), "Not enough coverage available.");
-        for (uint256 i = 0; i < covBases.length; i++) covBases[i].updateShield(ethValue);
 
         arToken.mint(user, arAmount);
         emit Mint(user, arAmount, block.timestamp);
@@ -176,8 +173,6 @@ contract arShield {
       external
     {
         address user = msg.sender;
-        _setReferrer(user, _referrer);
-
         uint256 pAmount = pValue(_arAmount);
         arToken.transferFrom(user, address(this), _arAmount);
         arToken.burn(_arAmount);
@@ -190,13 +185,12 @@ contract arShield {
         ) = _findFees(pAmount);
 
         pToken.transfer(user, pAmount - fee);
-        _saveFees(newFees, refFee);
+        _saveFees(newFees, _referrer, refFee);
 
-        // update shield values so coverage will be updated immediately.
-        //if (capped) {
+        // If we update this above, the coverage base may try to buy more coverage than it has funds for.
+        // If we don't update this here, users will get stuck paying for coverage that they are not using.
         uint256 ethValue = getEthValue(pToken.balanceOf( address(this) ) - totalFees);
         for (uint256 i = 0; i < covBases.length; i++) covBases[i].updateShield(ethValue);
-        //}
 
         emit Redemption(user, _arAmount, block.timestamp);
     }
@@ -452,22 +446,6 @@ contract arShield {
     }
 
     /**
-     * @dev Set referrer for a user if they do not have one.
-     * @param _user User making the call.
-     * @param _referrer Referrer to set.
-    **/
-    function _setReferrer(
-        address _user,
-        address _referrer
-    )
-      internal
-    {
-        if ( referrers[_user] == address(0) ) {
-            referrers[_user] = _referrer == address(0) ? beneficiary : _referrer;
-        }
-    }
-
-    /**
      * @dev Find the fee for deposit and withdrawal.
      * @param _pAmount The amount of pTokens to find the fee of.
      * @return userFee coverage + mint fees + liquidator bonus + referral fee.
@@ -519,12 +497,14 @@ contract arShield {
     **/
     function _saveFees(
         uint256[] memory liqFees,
+        address _referrer,
         uint256 _refFee
     )
       internal
     {
         refTotal += _refFee;
-        refBals[ referrers[msg.sender] ] += _refFee;
+        if ( _referrer != address(0) ) refBals[_referrer] += _refFee;
+        else refBals[beneficiary] += _refFee;
         for (uint256 i = 0; i < liqFees.length; i++) feesToLiq[i] = liqFees[i];
     }
     
@@ -628,6 +608,19 @@ contract arShield {
     {
         require(_newFees.length == feePerBase.length, "Improper fees length.");
         for (uint256 i = 0; i < _newFees.length; i++) feePerBase[i] = _newFees[i];
+    }
+
+    /**
+     * @dev Change the main beneficiary of the shield.
+     * @param _beneficiary New address to withdraw excess funds and get default referral fees.
+    **/
+    function changeBeneficiary(
+        address payable _beneficiary
+    )
+      external
+      onlyGov
+    {
+        beneficiary = _beneficiary;
     }
 
     /**

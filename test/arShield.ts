@@ -289,12 +289,6 @@ describe("arShield", function () {
         expect(refBal).to.be.equal("2500000000000000000")
       });
 
-      it("should give referral to correct user", async function() {
-        await arShield.connect(user).mint( ETHER.mul(1000), referrer.getAddress() );
-        let ref = await arShield.referrers( user.getAddress() );
-        expect(ref).to.be.equal( await referrer.getAddress() );
-      });
-
       it("should be able to withdraw", async function() {
         let bal = await pToken.balanceOf( gov.getAddress() );
         await arShield.withdraw( gov.getAddress() );
