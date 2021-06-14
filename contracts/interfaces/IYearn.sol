@@ -3,5 +3,7 @@
 pragma solidity 0.8.4;
 
 interface IYearn {
-    function getPricePerFullShare() external view returns (uint256);
+    function pricePerShare() external view returns (uint256);
+    function decimals() external view returns(uint256);
+    function token() external view returns(address);
 }

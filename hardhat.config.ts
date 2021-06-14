@@ -6,6 +6,28 @@ import "hardhat-log-remover";
 // You need to export an object to set up your config
 // Go to https://hardhat.org/config/ to learn more
 
+
+let hardhatSettings:any = {
+      gas: 10000000,
+      accounts: {
+        accountsBalance: "1000000000000000000000000"
+      },
+      allowUnlimitedContractSize: true,
+      timeout: 1000000
+    };
+
+if (process.env.MAINNET_FORK) {
+  hardhatSettings = {
+      gas: 10000000,
+      chainId: 1,
+      accounts: {
+        accountsBalance: "1000000000000000000000000"
+      },
+    forking: { url: "https://eth-mainnet.alchemyapi.io/v2/90dtUWHmLmwbYpvIeC53UpAICALKyoIu", blockNumber: 12633224 },
+      allowUnlimitedContractSize: true,
+      timeout: 6000000
+    };
+}
 export default {
   spdxLicenseIdentifier: {
     overwrite: true,
@@ -51,15 +73,7 @@ export default {
     ]
   },
   networks: {
-    hardhat: {
-      gas: 10000000,
-      gasPrice: 100000000000,
-      accounts: {
-        accountsBalance: "1000000000000000000000000"
-      },
-      allowUnlimitedContractSize: true,
-      timeout: 1000000
-    },
+    hardhat: hardhatSettings,
     coverage: {
       url: 'http://localhost:8555'
     }

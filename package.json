@@ -8,6 +8,7 @@
     "lint": "eslint . --fix && solium -d contracts/ --fix",
     "lintNoFix": "eslint . && solium -d contracts/",
     "test": "NODE_OPTIONS='--max-old-space-size=4096' npx hardhat test",
+    "test:mainnet": "NODE_OPTIONS='--max-old-space-size=4096' MAINNET_FORK=true npx hardhat test",
     "coverage": "NODE_OPTIONS='--max-old-space-size=4096' npx hardhat coverage"
   },
   "repository": {
@@ -18,7 +19,7 @@
   "dependencies": {
     "bignumber.js": "9.0.1",
     "ethereumjs-util": "7.0.5",
-    "hardhat": "^2.0.4",
+    "hardhat": "^2.3.3",
     "openzeppelin-solidity": "^4.1.0"
   },
   "devDependencies": {
@@ -48,7 +49,7 @@
     "hardhat-spdx-license-identifier": "^2.0.2",
     "mocha-lcov-reporter": "1.3.0",
     "prettier": "2.1.2",
-    "solidity-coverage": "^0.7.12",
+    "solidity-coverage": "^0.7.16",
     "ts-node": "^9.0.0",
     "typescript": "^4.0.3",
     "web3": "^1.3.0"

@@ -36,7 +36,7 @@ describe("arShield", function () {
     await covBase.editShield(gov.getAddress(), true);
   });
 
-  describe.only("#update", function () {
+  describe("#update", function () {
   
     it("should update shield amounts.", async function(){
         await covBase.updateShield(ETHER);

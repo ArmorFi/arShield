@@ -103,9 +103,9 @@ contract YearnOracle {
         uint256 yOwed
     )
     {
-        uint256 oneYToken = IYearn(_yToken).getPricePerFullShare();
+        uint256 oneYToken = IYearn(_yToken).pricePerShare();
         yOwed = _uOwed 
-                * 1 ether 
+                * (10 ** IYearn(_yToken).decimals())
                 / oneYToken;
     }
     

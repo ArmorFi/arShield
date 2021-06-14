@@ -40,16 +40,16 @@ describe("ShieldController", function () {
   describe("#createShield", function () {
 
     beforeEach(async function() {
-      await controller.connect(gov).createShield("Armor yDAI", 
-                                                 "armorYDAI", 
-                                                 oracle.address,
-                                                 pToken.address,
-                                                 uTokenLink,
-                                                 masterCopy.address, 
-                                                 [25],
-                                                 [covBase.address]
-                                                );
-      
+      await controller.connect(gov).createShield(
+        "Armor yDAI",
+        "armorYDAI",
+        oracle.address,
+        pToken.address,
+        uTokenLink,
+        masterCopy.address,
+        [25],
+        [covBase.address]
+      );
       let shields = await controller.getShields();
       let shieldAddress = shields[0];
       arShield = await ethers.getContractAt("arShield", shieldAddress);
@@ -66,15 +66,16 @@ describe("ShieldController", function () {
       });
 
       it("should not create shield for rando", async function(){
-        await expect(controller.connect(user).createShield("Armor yDAI", 
-                                                          "armorYDAI", 
-                                                          oracle.address,
-                                                          pToken.address,
-                                                          uTokenLink,
-                                                          masterCopy.address, 
-                                                          [25],
-                                                          [covBase.address]
-                                                        )
+        await expect(controller.connect(user).createShield(
+          "Armor yDAI",
+          "armorYDAI",
+          oracle.address,
+          pToken.address,
+          uTokenLink,
+          masterCopy.address,
+          [25],
+          [covBase.address]
+        )
         ).to.be.revertedWith("msg.sender is not owner");
       });
 
