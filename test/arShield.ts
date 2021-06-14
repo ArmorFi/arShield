@@ -238,7 +238,7 @@ describe("arShield", function () {
       it("should be able to ban payouts from users", async function() {
         // Notify of hack, load contract with Ether.
         await arShield.notifyHack({value:ETHER.mul(10)});
-        await gov.sendTransaction({to:arShield.address, value:ETHER});
+        await gov.sendTransaction({to:arShield.address, value:ETHER.toString()});
         let arBalance = await arToken.balanceOf( gov.getAddress() )
 
         let block = await gov.provider.getBlockNumber();
@@ -253,7 +253,7 @@ describe("arShield", function () {
       it("should be able to claim funds", async function() {
         // Notify of hack, load contract with Ether.
         await arShield.notifyHack({value:ETHER.mul(10)});
-        await gov.sendTransaction({'to':arShield.address, 'value':ETHER});
+        await gov.sendTransaction({'to':arShield.address, 'value':ETHER.toString()});
 
         let block = await gov.provider.getBlockNumber();
         await mine();
@@ -312,7 +312,7 @@ describe("arShield", function () {
     });
 
     it("should be able to withdraw excess", async function() {
-      await gov.sendTransaction( {'to':arShield.address, 'value':ETHER} );
+      await gov.sendTransaction( {'to':arShield.address, 'value':ETHER.toString()} );
       let balance = await gov.getBalance();
       await arShield.withdrawExcess( ZERO_ADDY, gov.getAddress() );
       let endBal = await gov.getBalance();

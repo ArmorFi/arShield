@@ -3,7 +3,6 @@ import { ethers } from "hardhat";
 import { Contract, Signer, BigNumber, constants } from "ethers";
 import { increase, getTimestamp } from "./utils";
 import { Address } from "ethereumjs-util";
-import sdk from "@yfi/sdk";
 const ETHER = BigNumber.from("1000000000000000000");
 if(process.env.MAINNET_FORK) {
   describe.only("oracle_onchain", function () {
@@ -40,8 +39,7 @@ if(process.env.MAINNET_FORK) {
     describe("#uToY", function () {
       for(let i = 0; i<yTokenList.length; i++){
         it("check", async function(){
-          const res = await oracle.uToY(yTokenList[1], ETHER);
-          console.log(sdk.EarningsInterface);
+          const res = await oracle.uToY(yTokenList[i], ETHER);
           console.log(res.toString());
           console.log(ETHER.toString());
         });
@@ -51,6 +49,24 @@ if(process.env.MAINNET_FORK) {
       for(let i = 0; i<yTokenList.length; i++){
         it("check", async function(){
           const res = await oracle.ethToU(ETHER, link[i]);
+          console.log(res.toString());
+          console.log(ETHER.toString());
+        });
+      }
+    });
+    describe("#getTokensOwed", function () {
+      for(let i = 0; i<yTokenList.length; i++){
+        it("check", async function(){
+          const res = await oracle.getTokensOwed(ETHER, yTokenList[i], link[i]);
+          console.log(res.toString());
+          console.log(ETHER.toString());
+        });
+      }
+    });
+    describe("#getEthOwed", function () {
+      for(let i = 0; i<yTokenList.length; i++){
+        it("check", async function(){
+          const res = await oracle.getEthOwed(ETHER, yTokenList[i], link[i]);
           console.log(res.toString());
           console.log(ETHER.toString());
         });
