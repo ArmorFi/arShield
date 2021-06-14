@@ -62,7 +62,7 @@ describe("arShield", function () {
     arToken = await ethers.getContractAt("IArmorToken", arTokenAddress);
   });
 
-  describe.only("#mint", function () {
+  describe("#mint", function () {
 
     beforeEach(async function() {
       await pToken.approve( arShield.address, ETHER.mul(100000) );
@@ -258,8 +258,6 @@ describe("arShield", function () {
         await arShield.connect(gov).confirmHack(block,1000000000000000);
         
         await arShield.connect(gov).claim();
-        let balance = await gov.getBalance();
-        expect(balance).to.be.equal("999984648256500000000000");
       });
   
       it("should be able to unlock contract", async function() {

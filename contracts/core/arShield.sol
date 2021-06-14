@@ -238,12 +238,13 @@ contract arShield {
     {
         // Find balance at the payout block, multiply by the amount per token to pay, subtract anything paid.
         uint256 balance = arToken.balanceOfAt(msg.sender, payoutBlock);
+        uint256 owedBal = balance - paid[payoutBlock][msg.sender];
         uint256 amount = payoutAmt
-                         * (balance - paid[payoutBlock][msg.sender])
+                         * owedBal
                          / 1 ether;
 
         require(balance > 0 && amount > 0, "Sender did not have funds on payout block.");
-        paid[payoutBlock][msg.sender] += amount;
+        paid[payoutBlock][msg.sender] += owedBal;
         payable(msg.sender).transfer(amount);
     }
 
