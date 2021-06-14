@@ -40,8 +40,6 @@ contract arShield {
     // Total tokens to protect in the vault (tokens - fees).
     uint256 public totalTokens;
 
-    // referral => referrer
-    mapping (address => address) public referrers;
     // Balance of referrers.
     mapping (address => uint256) public refBals;
    // Whether user has been paid for a specific payout block.
@@ -154,8 +152,10 @@ contract arShield {
         _saveFees(newFees, _referrer, refFee);
 
         // If this vault is capped in its coverage, we check whether the mint should be allowed.
-        uint256 ethValue = getEthValue(pToken.balanceOf( address(this) ) - totalFees);
-        if (capped) require(checkCapped(ethValue), "Not enough coverage available.");
+        if (capped) {
+            uint256 ethValue = getEthValue(pToken.balanceOf( address(this) ) - totalFees);
+            require(checkCapped(ethValue), "Not enough coverage available.");
+        }
 
         arToken.mint(user, arAmount);
         emit Mint(user, arAmount, block.timestamp);

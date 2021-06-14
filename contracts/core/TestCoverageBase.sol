@@ -10,7 +10,7 @@ import '../interfaces/IController.sol';
  * @dev Coverage base takes care of all Armor Core interactions for arShields.
  * @author Armor.fi -- Robert M.C. Forster
 **/
-contract CoverageBase is ArmorClient {
+contract TestCoverageBase is ArmorClient {
     
     // Denominator for coverage percent.
     uint256 public constant DENOMINATOR = 10000;
@@ -76,9 +76,11 @@ contract CoverageBase is ArmorClient {
     function updateCoverage()
       external
     {
-        ArmorCore.deposit( address(this).balance );
-        ArmorCore.subscribe( protocol, getCoverage() );
-        totalCost = getCoverageCost();
+        // ArmorCore.deposit( address(this).balance );
+        // ArmorCore.subscribe( protocol, getCoverage() );
+        // totalCost = getCoverageCost();
+        // Just setting this for non-mainnet testing.
+        totalCost = 1000000000000;
         checkpoint();
     }
     
@@ -136,10 +138,10 @@ contract CoverageBase is ArmorClient {
         uint256 pastDiff = cumCost - uint256(stats.lastCumCost);
         uint256 currentDiff = costPerEth * ( block.timestamp - uint256(lastUpdate) );
         
-        owed = uint256(stats.ethValue) 
-               * pastDiff
-               + uint256(stats.ethValue)
-               * currentDiff
+        owed = (uint256(stats.ethValue) 
+               * pastDiff)
+               + (uint256(stats.ethValue)
+               * currentDiff)
                + uint256(stats.unpaid);
     }
     
@@ -150,9 +152,13 @@ contract CoverageBase is ArmorClient {
       internal
     {
         cumCost += costPerEth * (block.timestamp - lastUpdate);
-        costPerEth = totalCost 
-                     * 1 ether 
-                     / totalEthValue;
+        
+        if (totalEthValue > 0) {
+            costPerEth = totalCost 
+                         * 1 ether 
+                         / totalEthValue;
+        } else costPerEth = 0;
+
         lastUpdate = block.timestamp;
     }
     

@@ -62,7 +62,7 @@ describe("arShield", function () {
     arToken = await ethers.getContractAt("IArmorToken", arTokenAddress);
   });
 
-  describe("#mint", function () {
+  describe.only("#mint", function () {
 
     beforeEach(async function() {
       await pToken.approve( arShield.address, ETHER.mul(100000) );
@@ -91,7 +91,6 @@ describe("arShield", function () {
       
       it("should mint correctly with pTokens in contract", async function(){
         await arShield.connect(user).mint(ETHER.mul(1000), ZERO_ADDY);
-
         let userAr = await arToken.balanceOf( user.getAddress() );
         expect(userAr).to.be.equal("994987500000000000000");
 
