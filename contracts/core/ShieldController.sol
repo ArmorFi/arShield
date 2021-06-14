@@ -36,6 +36,9 @@ contract ShieldController is Governable {
         depositAmt = _depositAmt;
     }
 
+    // In case a token has Ether lost in it we need to be able to receive.
+    receive() external payable {}
+
     /**
      * @dev Create a new arShield from an already-created family.
      * @param _name Name of the armorToken to be created.
@@ -94,6 +97,25 @@ contract ShieldController is Governable {
         if (arShields[_idx] == _shield) delete arShields[_idx];
         arShields[_idx] = arShields[arShields.length - 1];
         arShields.pop();
+    }
+
+    /**
+     * @dev Claim any lost tokens on an arShield contract.
+     * @param _armorToken Address of the Armor token that has tokens or ether lost in it.
+     * @param _token The address of the lost token.
+     * @param _beneficiary Address to send the tokens to.
+    **/
+    function claimTokens(
+        address _armorToken,
+        address _token,
+        address payable _beneficiary
+    )
+      external
+      onlyGov
+    {
+        ArmorToken(_armorToken).claimTokens(_token);
+        if (_token == address(0)) _beneficiary.transfer(address(this).balance);
+        else ArmorToken(_token).transfer( _beneficiary, ArmorToken(_token).balanceOf( address(this) ) );
     }
 
     /**
