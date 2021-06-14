@@ -24,11 +24,11 @@ describe("ShieldController", function () {
     user = accounts[1];
 
     const CONTROLLER = await ethers.getContractFactory("ShieldController");
-    controller = await CONTROLLER.deploy();
+    controller = await CONTROLLER.deploy(50, 10000, ETHER.mul(10));
     const SHIELD = await ethers.getContractFactory("arShield");
     masterCopy = await SHIELD.deploy();
     const COVBASE = await ethers.getContractFactory("CoverageBase");
-    covBase = await COVBASE.deploy(controller.address);
+    covBase = await COVBASE.deploy(controller.address, controller.address, 5000);
     const ORACLE = await ethers.getContractFactory("YearnOracle");
     oracle = await ORACLE.deploy();
     const PTOKEN = await ethers.getContractFactory("ERC20");
@@ -42,12 +42,12 @@ describe("ShieldController", function () {
     beforeEach(async function() {
       await controller.connect(gov).createShield("Armor yDAI", 
                                                  "armorYDAI", 
-                                                 masterCopy.address, 
+                                                 oracle.address,
                                                  pToken.address,
                                                  uTokenLink,
-                                                 oracle.address,
-                                                 [covBase.address],
-                                                 [25]
+                                                 masterCopy.address, 
+                                                 [25],
+                                                 [covBase.address]
                                                 );
       
       let shields = await controller.getShields();
@@ -68,12 +68,12 @@ describe("ShieldController", function () {
       it("should not create shield for rando", async function(){
         await expect(controller.connect(user).createShield("Armor yDAI", 
                                                           "armorYDAI", 
-                                                          masterCopy.address, 
+                                                          oracle.address,
                                                           pToken.address,
                                                           uTokenLink,
-                                                          oracle.address,
-                                                          [covBase.address],
-                                                          [25]
+                                                          masterCopy.address, 
+                                                          [25],
+                                                          [covBase.address]
                                                         )
         ).to.be.revertedWith("msg.sender is not owner");
       });
@@ -125,10 +125,10 @@ describe("ShieldController", function () {
 
     it("should change bonus", async function(){
       let oldBonus = await controller.bonus();
-      expect(oldBonus).to.be.equal(0);
-      await controller.connect(gov).changeBonus(50);
+      expect(oldBonus).to.be.equal(50);
+      await controller.connect(gov).changeBonus(100);
       let newBonus = await controller.bonus();
-      expect(newBonus).to.be.equal(50);
+      expect(newBonus).to.be.equal(100);
     });
 
     it("should not change bonus for rando", async function(){
@@ -137,7 +137,7 @@ describe("ShieldController", function () {
 
     it("should change deposit amount", async function(){
       let oldAmt = await controller.depositAmt();
-      expect(oldAmt).to.be.equal(0);
+      expect(oldAmt).to.be.equal(ETHER.mul(10));
       await controller.connect(gov).changeDepositAmt( ETHER.mul(5) );
       let newAmt = await controller.depositAmt();
       expect(newAmt).to.be.equal(ETHER.mul(5));
@@ -150,12 +150,12 @@ describe("ShieldController", function () {
     it("should get array of shields", async function(){
       await controller.connect(gov).createShield("Armor yDAI", 
                                                  "armorYDAI", 
-                                                 masterCopy.address, 
+                                                 oracle.address,
                                                  pToken.address,
                                                  uTokenLink,
-                                                 oracle.address,
-                                                 [covBase.address],
-                                                 [25]
+                                                 masterCopy.address, 
+                                                 [25],
+                                                 [covBase.address]
                                                 );
       
       let shields = await controller.getShields();
@@ -165,12 +165,12 @@ describe("ShieldController", function () {
     it("should delete shield", async function(){
       await controller.connect(gov).createShield("Armor yDAI", 
                                                  "armorYDAI", 
-                                                 masterCopy.address, 
+                                                 oracle.address,
                                                  pToken.address,
                                                  uTokenLink,
-                                                 oracle.address,
-                                                 [covBase.address],
-                                                 [25]
+                                                 masterCopy.address, 
+                                                 [25],
+                                                 [covBase.address]
                                                 );
       let shields = await controller.getShields();
       let shieldAddress = shields[0];
