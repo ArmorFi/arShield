@@ -2,6 +2,7 @@
 
 pragma solidity 0.8.4;
 
+import 'hardhat/console.sol';
 import '../client/ArmorClient.sol';
 import '../interfaces/IController.sol';
 
@@ -73,14 +74,14 @@ contract TestCoverageBase is ArmorClient {
     /**
      * @dev Called by a keeper to update the amount covered by this contract on arCore.
     **/
-    function updateCoverage()
+    function updateCoverage(uint256 _totalCost)
       external
     {
         // ArmorCore.deposit( address(this).balance );
         // ArmorCore.subscribe( protocol, getCoverage() );
         // totalCost = getCoverageCost();
         // Just setting this for non-mainnet testing.
-        totalCost = 1000000000000;
+        totalCost = _totalCost;
         checkpoint();
     }
     
@@ -137,12 +138,14 @@ contract TestCoverageBase is ArmorClient {
         // difference between current cumulative and cumulative at last shield update
         uint256 pastDiff = cumCost - uint256(stats.lastCumCost);
         uint256 currentDiff = costPerEth * ( block.timestamp - uint256(lastUpdate) );
-        
+
         owed = (uint256(stats.ethValue) 
-               * pastDiff)
-               + (uint256(stats.ethValue)
-               * currentDiff)
-               + uint256(stats.unpaid);
+                  * pastDiff
+                  / 1 ether)
+                + (uint256(stats.ethValue)
+                  * currentDiff
+                  / 1 ether)
+                + uint256(stats.unpaid);
     }
     
     /**
@@ -152,7 +155,7 @@ contract TestCoverageBase is ArmorClient {
       internal
     {
         cumCost += costPerEth * (block.timestamp - lastUpdate);
-        
+
         if (totalEthValue > 0) {
             costPerEth = totalCost 
                          * 1 ether 
@@ -295,7 +298,7 @@ contract TestCoverageBase is ArmorClient {
       external
       onlyGov
     {
-        require(_newPct <= 1000, "Coverage percent may not be greater than 100%.");
+        require(_newPct <= 10000, "Coverage percent may not be greater than 100%.");
         coverPct = _newPct;    
     }
     

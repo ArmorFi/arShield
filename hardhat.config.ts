@@ -2,7 +2,7 @@ import "@nomiclabs/hardhat-waffle";
 import "solidity-coverage";
 import "hardhat-spdx-license-identifier";
 import "hardhat-log-remover";
-//import "hardhat-gas-reporter";
+//import "hardhat-docgen";
 // You need to export an object to set up your config
 // Go to https://hardhat.org/config/ to learn more
 
@@ -37,6 +37,12 @@ export default {
     enabled: false,
     currency: 'USD',
     gasPrice: 100,
+  },
+  docgen: {
+    path: './docs',
+    clear: true,
+    runOnCompile: true,
+    only: ['^contracts/'],
   },
   solidity: {
     compilers :[

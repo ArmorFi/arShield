@@ -68,6 +68,7 @@ contract CoverageBase is ArmorClient {
         coverPct = _coverPct;
     }
     
+    // Needed to receive a claim payout.
     receive() external payable {}
 
     /**
@@ -136,11 +137,13 @@ contract CoverageBase is ArmorClient {
         uint256 pastDiff = cumCost - uint256(stats.lastCumCost);
         uint256 currentDiff = costPerEth * ( block.timestamp - uint256(lastUpdate) );
         
-        owed = uint256(stats.ethValue) 
-               * pastDiff
-               + uint256(stats.ethValue)
-               * currentDiff
-               + uint256(stats.unpaid);
+        owed = (uint256(stats.ethValue) 
+                  * pastDiff
+                  / 1 ether)
+                + (uint256(stats.ethValue)
+                  * currentDiff
+                  / 1 ether)
+                + uint256(stats.unpaid);
     }
     
     /**
@@ -289,7 +292,7 @@ contract CoverageBase is ArmorClient {
       external
       onlyGov
     {
-        require(_newPct <= 1000, "Coverage percent may not be greater than 100%.");
+        require(_newPct <= 10000, "Coverage percent may not be greater than 100%.");
         coverPct = _newPct;    
     }
     
