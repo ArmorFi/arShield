@@ -1,5 +1,5 @@
 {
-  "name": "arvault",
+  "name": "arShield",
   "version": "0.0.1",
   "description": "arvault contract",
   "scripts": {
@@ -20,7 +20,8 @@
     "bignumber.js": "9.0.1",
     "ethereumjs-util": "7.0.5",
     "hardhat": "^2.3.3",
-    "openzeppelin-solidity": "^4.1.0"
+    "openzeppelin-solidity": "^4.1.0",
+    "solc": "^0.8.5"
   },
   "devDependencies": {
     "@nomiclabs/hardhat-ethers": "^2.0.0",
@@ -45,6 +46,7 @@
     "ethereum-waffle": "^3.2.0",
     "ethers": "^5.3.1",
     "ethlint": "1.2.5",
+    "hardhat-docgen": "^1.1.1",
     "hardhat-gas-reporter": "^1.0.4",
     "hardhat-log-remover": "^2.0.0",
     "hardhat-spdx-license-identifier": "^2.0.2",

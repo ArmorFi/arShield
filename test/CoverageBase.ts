@@ -12,7 +12,6 @@ describe("CoverageBase", function () {
   let gov : Signer;
   let user : Signer;
   let controller: Contract;
-  let core: Contract;
   let covBase: Contract;
 
   beforeEach(async function() {
@@ -24,8 +23,6 @@ describe("CoverageBase", function () {
     controller = await CONTROLLER.deploy(50, 10000, ETHER.mul(10));
     const COVBASE = await ethers.getContractFactory("TestCoverageBase");
     covBase = await COVBASE.deploy(controller.address, controller.address, 5000);
-    const CORE = await ethers.getContractFactory("MockCore");
-    core = await CORE.deploy();
 
     // Set governance to shield
     await covBase.editShield(gov.getAddress(), true);

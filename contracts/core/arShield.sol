@@ -151,10 +151,14 @@ contract arShield {
         pToken.transferFrom(user, address(this), _pAmount);
         _saveFees(newFees, _referrer, refFee);
 
-        // If this vault is capped in its coverage, we check whether the mint should be allowed.
+        // If this vault is capped in its coverage, we check whether the mint should be allowed, and update.
         if (capped) {
             uint256 ethValue = getEthValue(pToken.balanceOf( address(this) ) - totalFees);
             require(checkCapped(ethValue), "Not enough coverage available.");
+
+            // If we don't update here, two shields could get big deposits at the same time and allow both when it shouldn't.
+            // This update runs the risk of making CoverageBase need to pay more than it has upfront, but in that case we liquidate.
+            for (uint256 i = 0; i < covBases.length; i++) covBases[i].updateShield(ethValue);
         }
 
         arToken.mint(user, arAmount);
@@ -187,7 +191,6 @@ contract arShield {
         pToken.transfer(user, pAmount - fee);
         _saveFees(newFees, _referrer, refFee);
 
-        // If we update this above, the coverage base may try to buy more coverage than it has funds for.
         // If we don't update this here, users will get stuck paying for coverage that they are not using.
         uint256 ethValue = getEthValue(pToken.balanceOf( address(this) ) - totalFees);
         for (uint256 i = 0; i < covBases.length; i++) covBases[i].updateShield(ethValue);

@@ -180,7 +180,7 @@ describe("arShield", function () {
       await arShield.liquidate(0, {value: ETHER});
 
       let bal = await pToken.balanceOf( gov.getAddress() );
-      expect(bal).to.be.equal("899002512500000000000000");
+      expect(bal).to.be.equal("1099002512500000000000000");
       let shieldBal = await gov.provider.getBalance(arShield.address);
       expect(shieldBal).to.be.equal("0")
       let covBal = await gov.provider.getBalance(covBase.address);
@@ -193,7 +193,7 @@ describe("arShield", function () {
     it("should liquidate half of liqAmts with 0 tokens owed", async function() {
       await arShield.liquidate(0, {value: ETHER.div(2)});
       let bal = await pToken.balanceOf( gov.getAddress() );
-      expect(bal).to.be.equal("899001256250000000000000");
+      expect(bal).to.be.equal("1099001256250000000000000");
     });      
 
     it("should liquidate with protocol fees", async function() {
