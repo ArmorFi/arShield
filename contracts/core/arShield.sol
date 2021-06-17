@@ -16,6 +16,15 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 **/
 contract arShield {
 
+    /**
+     * @dev Universal requirements:
+     *      - notLocked functions must never be able to be accessed if locked.
+     *      - onlyGov functions must only ever be able to be accessed by governance.
+     *      - Total of refBals must always equal refTotal.
+     *      - depositor should always be address(0) if contract is not locked.
+     *      - totalTokens must always equal pToken.balanceOf( address(this) ) - (refTotal + sum(feesToLiq) ).
+    **/
+
     // Denominator for % fractions.
     uint256 constant DENOMINATOR = 10000;
     
@@ -86,7 +95,10 @@ contract arShield {
     receive() external payable {}
     
     /**
-     * @dev Controller immediately initializes contract with this.
+     * @notice Controller immediately initializes contract with this.
+     * @dev - Must set all included variables properly.
+     *      - Must set covBases and fees in correct order.
+     *      - Must not allowed improper lengths.
      * @param _oracle Address of our oracle for this family of tokens.
      * @param _pToken The protocol token we're protecting.
      * @param _arToken The Armor token that the vault controls.
@@ -125,8 +137,12 @@ contract arShield {
     }
 
     /**
-     * @dev User deposits pToken, is returned arToken. Amount returned is judged based off amount in contract.
-     *      Amount returned will likely be more than deposited because pTokens will be removed to pay for cover.
+     * @notice User deposits pToken, is returned arToken. Amount returned is judged based off amount in contract.
+     *         Amount returned will likely be more than deposited because pTokens will be removed to pay for cover.
+     * @dev - Must increase referrer bal 0.25% (in tests) if there is a referrer, beneficiary bal if not.
+     *      - Important: must mint correct value of tokens in all scenarios. Conversion from pToken to arToken - (referral fee - feePerBase amounts - liquidator bonus).
+     *      - Must take exactly _pAmount from user and deposit to this address.
+     *      - Important: must save all fees correctly.
      * @param _pAmount Amount of pTokens to deposit to the contract.
      * @param _referrer The address that referred the user to arShield.
     **/
@@ -166,7 +182,11 @@ contract arShield {
     }
 
     /**
-     * @dev Redeem arTokens for underlying pTokens.
+     * @notice Redeem arTokens for underlying pTokens.
+     * @dev - Must increase referrer bal 0.25% (in tests) if there is a referrer, beneficiary bal if not.
+     *      - Important: must return correct value of tokens in all scenarios. Conversion from arToken to pToken - (referral fee - feePerBase amounts - liquidator bonus).
+     *      - Must take exactly _arAmount from user and deposit to this address.
+     *      - Important: must save all fees correctly.
      * @param _arAmount Amount of arTokens to redeem.
      * @param _referrer The address that referred the user to arShield.
     **/
@@ -199,7 +219,12 @@ contract arShield {
     }
 
     /**
-     * @dev Liquidate for payment for coverage by selling to people at oracle price.
+     * @notice Liquidate for payment for coverage by selling to people at oracle price.
+     * @dev - Must give correct amount of tokens.
+     *      - Must take correct amount of Ether back.
+     *      - Must adjust fees correctly afterwards.
+     *      - Must not allow any extra to be sold than what's needed.
+     * @param _covId covBase ID that we are liquidating.
     **/
     function liquidate(
         uint256 _covId
@@ -233,7 +258,11 @@ contract arShield {
     }
 
     /**
-     * @dev Claim funds if you were holding tokens on the payout block.
+     * @notice Claim funds if you were holding tokens on the payout block.
+     * @dev - Must return correct amount of funds to user according to their balance at the time.
+     *      - Must subtract if paid mapping has value.
+     *      - Must correctly set paid.
+     *      - Must only ever work for users who held tokens at exactly payout block.
     **/
     function claim()
       external
@@ -252,7 +281,9 @@ contract arShield {
     }
 
     /**
-     * @dev Used by referrers to withdraw their owed balance.
+     * @notice Used by referrers to withdraw their owed balance.
+     * @dev - Must allow user to withdraw correct referral balance from the contract.
+     *      - Must allow no extra than referral balance to be withdrawn.
     **/
     function withdraw(
         address _user
@@ -265,7 +296,8 @@ contract arShield {
     }
 
     /**
-     * @dev Inverse of arValue (find yToken value of arToken amount).
+     * @notice Inverse of arValue (find yToken value of arToken amount).
+     * @dev - Must convert correctly in any scenario.
      * @param _arAmount Amount of arTokens to find yToken value of.
      * @return pAmount Amount of pTokens the input arTokens are worth.
     **/
@@ -287,7 +319,8 @@ contract arShield {
     }
 
     /**
-     * @dev Find the arToken value of a pToken amount.
+     * @notice Find the arToken value of a pToken amount.
+     * @dev - Must convert correctly in any scenario.
      * @param _pAmount Amount of yTokens to find arToken value of.
      * @return arAmount Amount of arToken the input pTokens are worth.
     **/
@@ -309,7 +342,8 @@ contract arShield {
     }
 
     /**
-     * @dev Amounts owed to be liquidated.
+     * @notice Amounts owed to be liquidated.
+     * @dev - Must always return correct amounts that can currently be liquidated.
      * @param _covId Coverage Base ID lol
      * @return ethOwed Amount of Ether owed to coverage base.
      * @return tokensOwed Amount of tokens owed to liquidator for that Ether.
@@ -351,7 +385,8 @@ contract arShield {
     }
 
     /**
-     * @dev Find amount to pay a liquidator--needed because a liquidator may not pay all Ether. 
+     * @notice Find amount to pay a liquidator--needed because a liquidator may not pay all Ether.
+     * @dev - Must always return correct amounts to be paid according to liqAmts and Ether in.
     **/
     function payAmts(
         uint256 _ethIn,
@@ -386,7 +421,8 @@ contract arShield {
     }
 
     /**
-     * @dev Find total amount of tokens that are not to be covered (ref fees, tokens to liq, liquidator bonus).
+     * @notice Find total amount of tokens that are not to be covered (ref fees, tokens to liq, liquidator bonus).
+     * @dev - Must always return correct total fees owed.
      * @return totalOwed Total amount of tokens owed in fees.
     **/
     function totalFeeAmts()
@@ -411,7 +447,8 @@ contract arShield {
     }
 
     /**
-     * @dev If the shield requires full coverage, check coverage base to see if it is available.
+     * @notice If the shield requires full coverage, check coverage base to see if it is available.
+     * @dev - Must return false if any of the covBases do not have coverage available.
      * @param _ethValue Ether value of the new tokens.
      * @return allowed True if the deposit is allowed.
     **/
@@ -433,7 +470,8 @@ contract arShield {
     }
 
     /**
-     * Find the Ether value of a certain amount of pTokens.
+     * @notice Find the Ether value of a certain amount of pTokens.
+     * @dev - Must return correct Ether value for _pAmount.
      * @param _pAmount The amount of pTokens to find Ether value for.
      * @return ethValue Ether value of the pTokens (in Wei).
     **/
@@ -450,7 +488,7 @@ contract arShield {
     }
 
     /**
-     * @dev Find the fee for deposit and withdrawal.
+     * @notice Find the fee for deposit and withdrawal.
      * @param _pAmount The amount of pTokens to find the fee of.
      * @return userFee coverage + mint fees + liquidator bonus + referral fee.
      * @return refFee Referral fee.
@@ -495,7 +533,7 @@ contract arShield {
     }
 
     /**
-     * @dev Save new coverage fees and referral fees.
+     * @notice Save new coverage fees and referral fees.
      * @param liqFees Fees associated with depositing to a coverage base.
      * @param _refFee Fee given to the address that referred this user.
     **/
@@ -513,8 +551,10 @@ contract arShield {
     }
     
     /**
-     * @dev Anyone may call this to pause contract deposits for a couple days.
-     *      They will get refunded + more when hack is confirmed.
+     * @notice Anyone may call this to pause contract deposits for a couple days.
+     * @notice They will get refunded + more when hack is confirmed.
+     * @dev - Must allow any user to lock contract when a deposit is sent.
+     *      - Must set variables correctly.
     **/
     function notifyHack()
       external
@@ -528,7 +568,10 @@ contract arShield {
     }
     
     /**
-     * @dev Used by controller to confirm that a hack happened, which then locks the contract in anticipation of claims.
+     * @notice Used by controller to confirm that a hack happened, which then locks the contract in anticipation of claims.
+     * @dev - On success, depositor paid exactly correct deposit amount (10 Ether in tests.).
+     *      - depositor == address(0).
+     *      - payoutBlock and payoutAmt set correctly.
      * @param _payoutBlock Block that user must have had tokens at. Will not be the same as when the hack occurred
      *                     because we will need to give time for users to withdraw from dexes and such if needed.
      * @param _payoutAmt The amount of Ether PER TOKEN that users will be given for this claim.
@@ -550,7 +593,8 @@ contract arShield {
     }
     
     /**
-     * @dev Used by controller to confirm that a hack happened, which then locks the contract in anticipation of claims.
+     * @notice Used by controller to confirm that a hack happened, which then locks the contract in anticipation of claims.
+     * @dev - On success, locked == false, payoutBlock == 0, payoutAmt == 0.
     **/
     function unlock()
       external
@@ -564,7 +608,9 @@ contract arShield {
     }
 
     /**
-     * @dev Funds may be withdrawn to beneficiary if any are leftover after a hack.
+     * @notice Funds may be withdrawn to beneficiary if any are leftover after a hack.
+     * @dev - On success, full token/Ether balance should be withdrawn to beneficiary.
+     *      - Tokens/Ether should never be withdrawn anywhere other than beneficiary.
      * @param _token Address of the token to withdraw excess for. Cannot be protocol token.
     **/
     function withdrawExcess(address _token)
@@ -578,13 +624,14 @@ contract arShield {
     }
 
     /**
-     * @dev Block a payout if an address minted tokens after a hack occurred.
+     * @notice Block a payout if an address minted tokens after a hack occurred.
      *      There are ways people can mess with this to make it annoying to ban people,
      *      but ideally the presence of this function alone will stop malicious minting.
      * 
      *      Although it's not a likely scenario, the reason we put amounts in here
      *      is to avoid a bad actor sending a bit to a legitimate holder and having their
      *      full balance banned from receiving a payout.
+     * @dev - On success, paid[_payoutBlock][_users] for every user[i] should be incremented by _amount[i].
      * @param _payoutBlock The block at which the hack occurred.
      * @param _users List of users to ban from receiving payout.
      * @param _amounts Bad amounts (in arToken wei) that the user should not be paid.
@@ -601,7 +648,9 @@ contract arShield {
     }
 
     /**
-     * @dev Change the fees taken for minting and redeeming.
+     * @notice Change the fees taken for minting and redeeming.
+     * @dev - On success, feePerBase == _newFees.
+     *      - No success on inequal lengths.
      * @param _newFees Array for each of the new fees. 10 == 0.1% fee.
     **/
     function changeFees(
@@ -615,7 +664,8 @@ contract arShield {
     }
 
     /**
-     * @dev Change the main beneficiary of the shield.
+     * @notice Change the main beneficiary of the shield.
+     * @dev - On success, contract variable beneficiary == _beneficiary.
      * @param _beneficiary New address to withdraw excess funds and get default referral fees.
     **/
     function changeBeneficiary(
@@ -628,7 +678,8 @@ contract arShield {
     }
 
     /**
-     * @dev Change whether this arShield has a cap on tokens submitted or not.
+     * @notice Change whether this arShield has a cap on tokens submitted or not.
+     * @dev - On success, contract variable capped == _capped.
      * @param _capped True if there should now be a cap on the vault.
     **/
     function changeCapped(
