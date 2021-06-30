@@ -3,11 +3,12 @@
 pragma solidity 0.8.4;
 
 import '../client/ArmorClient.sol';
+import '../interfaces/IarShield.sol';
 import '../interfaces/IController.sol';
 
 /**
  * @title Coverage Base
- * @dev Coverage base takes care of all Armor Core interactions for arShields.
+ * @notice Coverage base takes care of all Armor Core interactions for arShields.
  * @author Armor.fi -- Robert M.C. Forster
 **/
 contract CoverageBase is ArmorClient {
@@ -20,7 +21,7 @@ contract CoverageBase is ArmorClient {
     // Percent of funds from shields to cover.
     uint256 public coverPct;
     // Current cost per second for all Ether on contract.
-    uint256 public totalCost;
+    uint256 public totalCostPerSec;
     // Current cost per second per Ether.
     uint256 public costPerEth;
     // sum of cost per Ether for every second -- cumulative lol.
@@ -52,7 +53,7 @@ contract CoverageBase is ArmorClient {
     }
 
     /**
-     * @dev Just used to set the controller for the coverage base.
+     * @notice Just used to set the controller for the coverage base.
      * @param _controller ShieldController proxy address.
      * @param _protocol Address of the protocol to cover (from Nexus Mutual).
      * @param _coverPct Percent of the cover to purchase -- 10000 == 100%.
@@ -72,19 +73,19 @@ contract CoverageBase is ArmorClient {
     receive() external payable {}
 
     /**
-     * @dev Called by a keeper to update the amount covered by this contract on arCore.
+     * @notice Called by a keeper to update the amount covered by this contract on arCore.
     **/
     function updateCoverage()
       external
     {
         ArmorCore.deposit( address(this).balance );
         ArmorCore.subscribe( protocol, getCoverage() );
-        totalCost = getCoverageCost();
+        totalCostPerSec = getCoverageCost();
         checkpoint();
     }
     
     /**
-     * @dev arShield uses this to update the value of funds on their contract and deposit payments to here.
+     * @notice arShield uses this to update the value of funds on their contract and deposit payments to here.
      *      We're okay with being loose-y goose-y here in terms of making sure shields pay (no cut-offs, timeframes, etc.).
      * @param _newEthValue The new Ether value of funds in the shield contract.
     **/
@@ -118,7 +119,7 @@ contract CoverageBase is ArmorClient {
     }
     
     /**
-     * @dev CoverageBase tells shield what % of current coverage it must pay.
+     * @notice CoverageBase tells shield what % of current coverage it must pay.
      * @param _shield Address of the shield to get owed amount for.
      * @return owed Amount of Ether that the shield owes for past coverage.
     **/
@@ -147,20 +148,20 @@ contract CoverageBase is ArmorClient {
     }
     
     /**
-     * @dev Record total values from last period and set new ones.
+     * @notice Record total values from last period and set new ones.
     **/
     function checkpoint()
       internal
     {
         cumCost += costPerEth * (block.timestamp - lastUpdate);
-        costPerEth = totalCost 
+        costPerEth = totalCostPerSec
                      * 1 ether 
                      / totalEthValue;
         lastUpdate = block.timestamp;
     }
     
     /**
-     * @dev Get the amount of coverage for all shields' current values.
+     * @notice Get the amount of coverage for all shields' current values.
     **/
     function getCoverage()
       public
@@ -175,7 +176,7 @@ contract CoverageBase is ArmorClient {
     }
     
     /**
-     * @dev Get the cost of coverage for all shields' current values.
+     * @notice Get the cost of coverage for all shields' current values.
     **/
     function getCoverageCost()
       public
@@ -188,7 +189,7 @@ contract CoverageBase is ArmorClient {
     }
     
     /**
-     * @dev Check whether a new Ether value is available for purchase.
+     * @notice Check whether a new Ether value is available for purchase.
      * @param _newEthValue The new Ether value of the shield.
      * @return allowed True if we may purchase this much more coverage.
     **/
@@ -210,7 +211,7 @@ contract CoverageBase is ArmorClient {
     }
 
     /**
-     * @dev Either add or delete a shield.
+     * @notice Either add or delete a shield.
      * @param _shield Address of the shield to edit.
      * @param _active Whether we want it to be added or deleted.
     **/
@@ -231,7 +232,7 @@ contract CoverageBase is ArmorClient {
     }
     
     /**
-     * @dev Withdraw an amount of funds from arCore.
+     * @notice Withdraw an amount of funds from arCore.
     **/
     function withdraw(address payable _beneficiary, uint256 _amount)
       external
@@ -242,7 +243,7 @@ contract CoverageBase is ArmorClient {
     }
     
     /**
-     * @dev Cancel entire arCore plan.
+     * @notice Cancel entire arCore plan.
     **/
     function cancelCoverage()
       external
@@ -252,7 +253,7 @@ contract CoverageBase is ArmorClient {
     }
     
     /**
-     * @dev Governance may call to a redeem a claim for Ether that this contract held.
+     * @notice Governance may call to a redeem a claim for Ether that this contract held.
      * @param _hackTime Time that the hack occurred.
      * @param _amount Amount of funds to be redeemed.
     **/
@@ -267,7 +268,7 @@ contract CoverageBase is ArmorClient {
     }
     
     /**
-     * @dev Governance may disburse funds from a claim to the chosen shields.
+     * @notice Governance may disburse funds from a claim to the chosen shields.
      * @param _shield Address of the shield to disburse funds to.
      * @param _amount Amount of funds to disburse to the shield.
     **/
@@ -278,12 +279,12 @@ contract CoverageBase is ArmorClient {
       external
       onlyGov
     {
-        require(shieldStats[_shield].lastUpdate > 0, "Shield is not authorized to use this contract.");
+        require(shieldStats[_shield].lastUpdate > 0 && IarShield(_shield).locked(), "Shield is not authorized to use this contract or shield is not locked.");
         _shield.transfer(_amount);
     }
     
     /**
-     * @dev Change the percent of coverage that should be bought. For example, 500 means that 50% of Ether value will be covered.
+     * @notice Change the percent of coverage that should be bought. For example, 500 means that 50% of Ether value will be covered.
      * @param _newPct New percent of coverage to be bought--1000 == 100%.
     **/
     function changeCoverPct(

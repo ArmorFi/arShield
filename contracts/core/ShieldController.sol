@@ -10,7 +10,7 @@ import '../proxies/OwnedUpgradeabilityProxy.sol';
 
 /** 
  * @title Shield Controller
- * @dev Shield Controller is in charge of creating new shields and storing universal variables.
+ * @notice Shield Controller is in charge of creating new shields and storing universal variables.
  * @author Armor.fi -- Robert M.C. Forster
 **/
 contract ShieldController is Governable {
@@ -40,7 +40,7 @@ contract ShieldController is Governable {
     receive() external payable {}
 
     /**
-     * @dev Create a new arShield from an already-created family.
+     * @notice Create a new arShield from an already-created family.
      * @param _name Name of the armorToken to be created.
      * @param _symbol Symbol of the armorToken to be created.
      * @param _oracle Address of the family's oracle contract to find token value.
@@ -83,7 +83,7 @@ contract ShieldController is Governable {
     }
 
     /**
-     * @dev Delete a shield. We use both shield address and index for safety.
+     * @notice Delete a shield. We use both shield address and index for safety.
      * @param _shield Address of the shield to delete from array.
      * @param _idx Index of the shield in the arShields array.
     **/
@@ -100,7 +100,7 @@ contract ShieldController is Governable {
     }
 
     /**
-     * @dev Claim any lost tokens on an arShield contract.
+     * @notice Claim any lost tokens on an arShield contract.
      * @param _armorToken Address of the Armor token that has tokens or ether lost in it.
      * @param _token The address of the lost token.
      * @param _beneficiary Address to send the tokens to.
@@ -119,7 +119,7 @@ contract ShieldController is Governable {
     }
 
     /**
-     * @dev Edit the discount on Chainlink price that liquidators receive.
+     * @notice Edit the discount on Chainlink price that liquidators receive.
      * @param _newBonus The new bonus amount that will be given to liquidators.
     **/
     function changeBonus(
@@ -132,7 +132,7 @@ contract ShieldController is Governable {
     }
 
     /**
-     * @dev Change amount required to deposit to lock a shield.
+     * @notice Change amount required to deposit to lock a shield.
      * @param _depositAmt New required deposit amount in Ether to lock a contract.
     **/
     function changeDepositAmt(
@@ -145,7 +145,7 @@ contract ShieldController is Governable {
     }
 
     /**
-     * @dev Change amount required to deposit to lock a shield.
+     * @notice Change amount required to deposit to lock a shield.
      * @param _refFee New fee to be paid to referrers. 10000 == 100%
      *                of the protocol fees that will be charged.
     **/
@@ -159,7 +159,7 @@ contract ShieldController is Governable {
     }
 
     /**
-     * @dev Get all arShields.
+     * @notice Get all arShields.
     **/
     function getShields()
       external

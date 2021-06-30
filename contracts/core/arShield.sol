@@ -366,8 +366,7 @@ contract arShield {
         if (ethOwed > 0) tokensOwed = oracle.getTokensOwed(ethOwed, address(pToken), uTokenLink);
 
         tokenFees = feesToLiq[_covId];
-        tokensOwed += tokenFees;
-        require(tokensOwed > 0, "No fees are owed.");
+        require(tokensOwed + tokenFees > 0, "No fees are owed.");
 
         // Find the Ether value of the mint fees we have.
         uint256 ethFees = ethOwed > 0 ?
@@ -376,6 +375,7 @@ contract arShield {
                             / tokensOwed
                           : getEthValue(tokenFees);
         ethOwed += ethFees;
+        tokensOwed += tokenFees;
 
         // Add a bonus for liquidators (0.5% to start).
         uint256 liqBonus = tokensOwed 
@@ -414,7 +414,6 @@ contract arShield {
 
         // Ether value of all of the contract minus what we're liquidating.
         ethValue = (pToken.balanceOf( address(this) ) 
-                    - _tokenFees
                     - totalFeeAmts())
                    * _ethOwed
                    / _tokensOwed;
@@ -528,8 +527,8 @@ contract arShield {
         uint256 liqBonus = (userFee - refFee) 
                            * controller.bonus()
                            / DENOMINATOR;
-        userFee += liqBonus;
-        totalFees += userFee + refTotal;
+        // userFee += liqBonus;
+        totalFees += userFee + refTotal + liqBonus;
     }
 
     /**
@@ -568,7 +567,7 @@ contract arShield {
     }
     
     /**
-     * @notice Used by controller to confirm that a hack happened, which then locks the contract in anticipation of claims.
+     * @notice Used by governor to confirm that a hack happened, which then locks the contract in anticipation of claims.
      * @dev - On success, depositor paid exactly correct deposit amount (10 Ether in tests.).
      *      - depositor == address(0).
      *      - payoutBlock and payoutAmt set correctly.

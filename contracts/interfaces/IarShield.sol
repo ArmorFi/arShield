@@ -13,4 +13,5 @@ interface IarShield {
         address[] calldata _covBases
     ) 
       external;
+    function locked() external view returns(bool);
 }
