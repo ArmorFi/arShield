@@ -2,7 +2,6 @@
 
 pragma solidity 0.8.4;
 
-import "../libraries/SafeMath.sol";
 import "../interfaces/IArmorMaster.sol";
 import "../interfaces/IBalanceManager.sol";
 import "../interfaces/IPlanManager.sol";
@@ -13,8 +12,6 @@ import "../interfaces/IStakeManager.sol";
  * @dev ArmorCore library simplifies integration of Armor Core into other contracts. It contains most functionality needed for a contract to use arCore.
 **/
 library ArmorCore {
-
-    using SafeMath for uint256;
 
     IArmorMaster internal constant armorMaster = IArmorMaster(0x1337DEF1900cEaabf5361C3df6aF653D814c6348);
 
@@ -33,7 +30,7 @@ library ArmorCore {
      * @return pricePerSec Ether (in Wei) price per second of this coverage.
     **/
     function calculatePricePerSec(address _protocol, uint256 _coverAmount) internal view returns (uint256 pricePerSec) {
-        return pricePerETH(_protocol).mul(_coverAmount).div(1e18);
+        return pricePerETH(_protocol) * _coverAmount / 1e18;
     }
 
     /**
@@ -45,9 +42,9 @@ library ArmorCore {
     function calculatePricePerSec(address[] memory _protocols, uint256[] memory _coverAmounts) internal view returns (uint256 pricePerSec) {
         require(_protocols.length == _coverAmounts.length, "Armor: array length diff");
         for(uint256 i = 0; i<_protocols.length; i++){
-            pricePerSec = pricePerSec.add(pricePerETH(_protocols[i]).mul(_coverAmounts[i]));
+            pricePerSec = pricePerSec + pricePerETH(_protocols[i]) * _coverAmounts[i];
         }
-        return pricePerSec.div(1e18);
+        return pricePerSec / 1e18;
     }
 
     /**
@@ -69,7 +66,7 @@ library ArmorCore {
     **/
     function pricePerETH(address _protocol) internal view returns(uint256 pricePerSecPerETH) {
         IPlanManager planManager = IPlanManager(getModule("PLAN"));
-        pricePerSecPerETH = planManager.nftCoverPrice(_protocol).mul(planManager.markup()).div(100);
+        pricePerSecPerETH = planManager.nftCoverPrice(_protocol) * planManager.markup() / 100;
     }
 
     /**
