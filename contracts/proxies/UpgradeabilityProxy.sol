@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.12;
-
+pragma solidity 0.8.4;
 import "./Proxy.sol";
 
 /**
@@ -16,7 +15,7 @@ contract UpgradeabilityProxy is Proxy {
     event Upgraded(address indexed implementation);
 
     // Storage position of the address of the current implementation
-    bytes32 private constant IMPLEMENTATION_POSITION = keccak256("org.govblocks.proxy.implementation");
+    bytes32 private constant IMPLEMENTATION_POSITION = keccak256("org.armor.proxy.implementation");
 
     /**
     * @dev Constructor function

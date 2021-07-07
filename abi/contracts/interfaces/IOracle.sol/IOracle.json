@@ -1,0 +1,60 @@
+[
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "tokensOwed",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "pToken",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "uTokenLink",
+        "type": "address"
+      }
+    ],
+    "name": "getEthOwed",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "ethOwed",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "pToken",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "uTokenLink",
+        "type": "address"
+      }
+    ],
+    "name": "getTokensOwed",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  }
+]

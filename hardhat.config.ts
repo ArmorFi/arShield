@@ -2,13 +2,47 @@ import "@nomiclabs/hardhat-waffle";
 import "solidity-coverage";
 import "hardhat-spdx-license-identifier";
 import "hardhat-log-remover";
+//import "hardhat-docgen";
 // You need to export an object to set up your config
 // Go to https://hardhat.org/config/ to learn more
 
+
+let hardhatSettings:any = {
+      gas: 10000000,
+      accounts: {
+        accountsBalance: "1000000000000000000000000"
+      },
+      allowUnlimitedContractSize: true,
+      timeout: 1000000
+    };
+
+if (process.env.MAINNET_FORK) {
+  hardhatSettings = {
+      gas: 10000000,
+      chainId: 1,
+      accounts: {
+        accountsBalance: "1000000000000000000000000"
+      },
+    forking: { url: "https://eth-mainnet.alchemyapi.io/v2/90dtUWHmLmwbYpvIeC53UpAICALKyoIu", blockNumber: 12633224 },
+      allowUnlimitedContractSize: true,
+      timeout: 6000000
+    };
+}
 export default {
   spdxLicenseIdentifier: {
     overwrite: true,
     runOnCompile: true,
+  },
+  gasReporter: {
+    enabled: false,
+    currency: 'USD',
+    gasPrice: 100,
+  },
+  docgen: {
+    path: './docs',
+    clear: true,
+    runOnCompile: true,
+    only: ['^contracts/'],
   },
   solidity: {
     compilers :[
@@ -34,7 +68,7 @@ export default {
         }
       },
       {
-        version: "0.5.17",
+        version: "0.8.4",
         settings: {
           optimizer : {
             enabled: true,
@@ -45,14 +79,7 @@ export default {
     ]
   },
   networks: {
-    hardhat: {
-      gas: 10000000,
-      accounts: {
-        accountsBalance: "1000000000000000000000000"
-      },
-      allowUnlimitedContractSize: true,
-      timeout: 1000000
-    },
+    hardhat: hardhatSettings,
     coverage: {
       url: 'http://localhost:8555'
     }

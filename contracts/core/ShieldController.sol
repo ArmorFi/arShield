@@ -1,66 +1,125 @@
-pragma solidity ^0.8.0;
-import './IarShield.sol';
-import './OwnedUpgradeabilityProxy.sol';
+// SPDX-License-Identifier: MIT
 
-contract ShieldController {
+pragma solidity 0.8.4;
 
-    // Amount of time between when a mint request is made and finalized.
-    uint256 public mintDelay;
+import './ArmorToken.sol';
+import '../general/Governable.sol';
+import '../interfaces/IarShield.sol';
+import '../interfaces/ICovBase.sol';
+import '../proxies/OwnedUpgradeabilityProxy.sol';
+
+/** 
+ * @title Shield Controller
+ * @notice Shield Controller is in charge of creating new shields and storing universal variables.
+ * @author Armor.fi -- Robert M.C. Forster
+**/
+contract ShieldController is Governable {
+
     // Liquidation bonus for users who are liquidating funds.
-    uint256 public liqBonus;
-    // Lock bonus for depositors who correctly lock a contract.
-    uint256 public depositReward;
+    uint256 public bonus;
+    // Fee % for referrals. 10000 == 100% of the rest of the fees.
+    uint256 public refFee;
     // Amount that needs to be deposited to lock the contract.
-    uint256 public depositAmount;
+    uint256 public depositAmt;
+    // List of all arShields
+    address[] private arShields;
 
-    address[] public arShields;
+    constructor(
+        uint256 _bonus,
+        uint256 _refFee,
+        uint256 _depositAmt
+    )
+    {
+        initializeOwnable();
+        bonus = _bonus;
+        refFee = _refFee;
+        depositAmt = _depositAmt;
+    }
+
+    // In case a token has Ether lost in it we need to be able to receive.
+    receive() external payable {}
 
     /**
-     * @dev Create a new arShield from an already-created family.
+     * @notice Create a new arShield from an already-created family.
+     * @param _name Name of the armorToken to be created.
+     * @param _symbol Symbol of the armorToken to be created.
+     * @param _oracle Address of the family's oracle contract to find token value.
+     * @param _pToken Protocol token that the shield will use.
+     * @param _uTokenLink Address of the ChainLink contract for the underlying token.
+     * @param _masterCopy Mastercopy for the arShield proxy.
+     * @param _fees Mint/redeem fee for each coverage base.
+     * @param _covBases Coverage bases that the shield will subscribe to.
     **/
     function createShield(
-        address _masterCopy,
+        string calldata _name,
+        string calldata _symbol,
+        address _oracle,
         address _pToken,
         address _uTokenLink,
-        address[] _covBases,
-        address _oracle,
-        uint256[] calldata _fees
+        address _masterCopy,
+        uint256[] calldata _fees,
+        address[] calldata _covBases
     )
       external
       onlyGov
     {
-        address token = new ArmorToken(_name, _symbol);
-        address proxy = new Proxy(_masterCopy);
+        address proxy = address( new OwnedUpgradeabilityProxy(_masterCopy) );
+        address token = address( new ArmorToken(proxy, _name, _symbol) );
         
         IarShield(proxy).initialize(
-            _pToken,
-            _uTokenLink,
-            _covBases,
             _oracle,
-            _fees
+            _pToken,
+            token,
+            _uTokenLink,
+            payable(msg.sender),
+            _fees,
+            _covBases
         );
         
-        for(uint256 i = 0; i < covBases.length; i++) {
-            _covBases[i].addShield(proxy);
-        }
+        for(uint256 i = 0; i < _covBases.length; i++) ICovBase(_covBases[i]).editShield(proxy, true);
 
         arShields.push(proxy);
+        OwnedUpgradeabilityProxy( payable(proxy) ).transferProxyOwnership(msg.sender);
     }
 
     /**
-     * @dev Controller can change different delay periods on the contract.
+     * @notice Delete a shield. We use both shield address and index for safety.
+     * @param _shield Address of the shield to delete from array.
+     * @param _idx Index of the shield in the arShields array.
     **/
-    function changeDelay(
-        uint256 _mintDelay
+    function deleteShield(
+        address _shield,
+        uint256 _idx
     )
       external
       onlyGov
     {
-        mintDelay = _mintDelay;
+        if (arShields[_idx] == _shield) delete arShields[_idx];
+        arShields[_idx] = arShields[arShields.length - 1];
+        arShields.pop();
     }
 
     /**
-     * @dev Edit the discount on Chainlink price that liquidators receive.
+     * @notice Claim any lost tokens on an arShield contract.
+     * @param _armorToken Address of the Armor token that has tokens or ether lost in it.
+     * @param _token The address of the lost token.
+     * @param _beneficiary Address to send the tokens to.
+    **/
+    function claimTokens(
+        address _armorToken,
+        address _token,
+        address payable _beneficiary
+    )
+      external
+      onlyGov
+    {
+        ArmorToken(_armorToken).claimTokens(_token);
+        if (_token == address(0)) _beneficiary.transfer(address(this).balance);
+        else ArmorToken(_token).transfer( _beneficiary, ArmorToken(_token).balanceOf( address(this) ) );
+    }
+
+    /**
+     * @notice Edit the discount on Chainlink price that liquidators receive.
      * @param _newBonus The new bonus amount that will be given to liquidators.
     **/
     function changeBonus(
@@ -70,6 +129,46 @@ contract ShieldController {
       onlyGov
     {
         bonus = _newBonus;
+    }
+
+    /**
+     * @notice Change amount required to deposit to lock a shield.
+     * @param _depositAmt New required deposit amount in Ether to lock a contract.
+    **/
+    function changeDepositAmt(
+        uint256 _depositAmt
+    )
+      external
+      onlyGov
+    {
+        depositAmt = _depositAmt;
+    }
+
+    /**
+     * @notice Change amount required to deposit to lock a shield.
+     * @param _refFee New fee to be paid to referrers. 10000 == 100%
+     *                of the protocol fees that will be charged.
+    **/
+    function changeRefFee(
+        uint256 _refFee
+    )
+      external
+      onlyGov
+    {
+        refFee = _refFee;
+    }
+
+    /**
+     * @notice Get all arShields.
+    **/
+    function getShields()
+      external
+      view
+    returns(
+        address[] memory shields
+    )
+    {
+        shields = arShields;
     }
 
 }

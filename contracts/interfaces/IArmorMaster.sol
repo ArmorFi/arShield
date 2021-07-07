@@ -1,6 +1,6 @@
-// SPDX-License-Identifier: (c) Armor.Fi DAO, 2021
+// SPDX-License-Identifier: MIT
 
-pragma solidity ^0.6.0;
+pragma solidity 0.8.4;
 
 interface IArmorMaster {
     function registerModule(bytes32 _key, address _module) external;

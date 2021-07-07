@@ -1,6 +1,6 @@
-// SPDX-License-Identifier: (c) Armor.Fi DAO, 2021
+// SPDX-License-Identifier: MIT
 
-pragma solidity ^0.6.12;
+pragma solidity 0.8.4;
 
 interface IArmorClient {
     function submitProofOfLoss(uint256[] calldata _ids) external;

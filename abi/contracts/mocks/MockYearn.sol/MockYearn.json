@@ -1,0 +1,112 @@
+[
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_newOwed",
+        "type": "uint256"
+      }
+    ],
+    "name": "changeEthOwed",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_newOwed",
+        "type": "uint256"
+      }
+    ],
+    "name": "changeTokensOwed",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "ethOwed",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_tokensOwed",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "_pToken",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "_uTokenLink",
+        "type": "address"
+      }
+    ],
+    "name": "getEthOwed",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "owed",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_ethOwed",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "_pToken",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "_uTokenLink",
+        "type": "address"
+      }
+    ],
+    "name": "getTokensOwed",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "owed",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "tokensOwed",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  }
+]

@@ -11,6 +11,12 @@ export async function increase(seconds: number) {
   await (signer.provider as providers.JsonRpcProvider).send("evm_increaseTime", [seconds]);
 }
 
+export async function mine() {
+  const signers = await ethers.getSigners();
+  const signer = signers[0];
+  await (signer.provider as providers.JsonRpcProvider).send("evm_mine", []);
+}
+
 export async function getTimestamp() : Promise<BigNumber> {
   const signers = await ethers.getSigners();
   const signer = signers[0];
