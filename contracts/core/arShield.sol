@@ -216,7 +216,6 @@ contract arShield {
         for (uint256 i = 0; i < covBases.length; i++) covBases[i].updateShield(ethValue);
 
         emit Redemption(user, _arAmount, block.timestamp);
-
     }
 
     /**
