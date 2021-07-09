@@ -127,8 +127,8 @@ contract arShield {
       external
     {
         require(address(arToken) == address(0), "Contract already initialized.");
-        uTokenLink = _uTokenLink;
 
+        uTokenLink = _uTokenLink;
         pToken = IERC20(_pToken);
         oracle = IOracle(_oracle);
         arToken = IArmorToken(_arToken);
@@ -139,7 +139,7 @@ contract arShield {
         require(_covBases.length == _fees.length, "Improper length array.");
         for(uint256 i = 0; i < _covBases.length; i++) {
             covBases.push( ICovBase(_covBases[i]) );
-            feePerBase.push( _fees[i] );
+            feePerBase.push(_fees[i]);
             feesToLiq.push(0);
         }
     }
