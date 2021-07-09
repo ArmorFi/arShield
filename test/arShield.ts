@@ -328,4 +328,23 @@ describe("arShield", function () {
 
   });
 
+  describe("#additions", function () {
+
+    beforeEach(async function() {
+      await pToken.approve( arShield.address, ETHER.mul(100000) );
+      await arShield.mint(ETHER.mul(1000), ZERO_ADDY);
+    });
+
+    it("should limit deposits correctly", async function() {
+      await arShield.connect(gov).changeLimit(ETHER.mul(1001));
+      await expect(arShield.mint(ETHER.mul(2), ZERO_ADDY)).to.be.revertedWith("Too much value in the shield.");
+    });
+
+    it("should find fees correctly", async function() {
+      let fee = await arShield.findFeePct();
+      expect(fee).to.be.equal(50);
+    });
+
+  });
+
 });

@@ -32,6 +32,8 @@ contract arShield {
     bool public capped;
     // Whether or not the contract is locked.
     bool public locked;
+    // Limit of tokens (in Wei) that can be entered into the shield.
+    uint256 public limit;
     // Address that will receive default referral fees and excess eth/tokens.
     address payable public beneficiary;
     // User who deposited to notify of a hack.
@@ -91,6 +93,14 @@ contract arShield {
         require(!locked, "You may not do this while the contract is locked.");
         _;
     }
+
+    // Used for initial soft launch to limit the amount of funds in the shield. 0 if unlimited.
+    modifier withinLimits
+    {
+        _;
+        uint256 _limit = limit;
+        require(_limit == 0 || pToken.balanceOf( address(this) ) <= _limit, "Too much value in the shield.");
+    }
     
     receive() external payable {}
     
@@ -98,7 +108,7 @@ contract arShield {
      * @notice Controller immediately initializes contract with this.
      * @dev - Must set all included variables properly.
      *      - Must set covBases and fees in correct order.
-     *      - Must not allowed improper lengths.
+     *      - Must not allow improper lengths.
      * @param _oracle Address of our oracle for this family of tokens.
      * @param _pToken The protocol token we're protecting.
      * @param _arToken The Armor token that the vault controls.
@@ -152,6 +162,7 @@ contract arShield {
     )
       external
       notLocked
+      withinLimits
     {
         address user = msg.sender;
 
@@ -487,6 +498,24 @@ contract arShield {
     }
 
     /**
+     * @notice Allows frontend to find the percents that are taken from mint/redeem. 10 == 0.1%.
+    **/
+    function findFeePct()
+      external
+      view
+    returns(
+        uint256 percent
+    )
+    {
+        // Find protocol fees for each coverage base.
+        uint256 end = feePerBase.length;
+        for (uint256 i = 0; i < end; i++) percent += feePerBase[i];
+        percent += controller.refFee() 
+                   * percent
+                   / DENOMINATOR;
+    }
+
+    /**
      * @notice Find the fee for deposit and withdrawal.
      * @param _pAmount The amount of pTokens to find the fee of.
      * @return userFee coverage + mint fees + liquidator bonus + referral fee.
@@ -527,7 +556,8 @@ contract arShield {
         uint256 liqBonus = (userFee - refFee) 
                            * controller.bonus()
                            / DENOMINATOR;
-        // userFee += liqBonus;
+
+        userFee += liqBonus;
         totalFees += userFee + refTotal + liqBonus;
     }
 
@@ -688,6 +718,20 @@ contract arShield {
       onlyGov
     {
         capped = _capped;
+    }
+
+    /**
+     * @notice Change whether this arShield has a limit to tokens in the shield.
+     * @dev - On success, contract variable limit == _limit.
+     * @param _limit Limit of funds in the contract, 0 if unlimited.
+    **/
+    function changeLimit(
+        uint256 _limit
+    )
+      external
+      onlyGov
+    {
+        limit = _limit;
     }
 
 }
