@@ -21,6 +21,8 @@ contract ShieldController is Governable {
     uint256 public refFee;
     // Amount that needs to be deposited to lock the contract.
     uint256 public depositAmt;
+    // Default beneficiary of all shields.
+    address payable public beneficiary;
     // List of all arShields
     address[] private arShields;
 
@@ -34,6 +36,7 @@ contract ShieldController is Governable {
         bonus = _bonus;
         refFee = _refFee;
         depositAmt = _depositAmt;
+        beneficiary = payable(msg.sender);
     }
 
     // In case a token has Ether lost in it we need to be able to receive.
@@ -71,7 +74,6 @@ contract ShieldController is Governable {
             _pToken,
             token,
             _uTokenLink,
-            payable(msg.sender),
             _fees,
             _covBases
         );
@@ -156,6 +158,19 @@ contract ShieldController is Governable {
       onlyGov
     {
         refFee = _refFee;
+    }
+
+    /**
+     * @notice Change the main beneficiary of all shields.
+     * @param _beneficiary New address to withdraw excess funds and get default referral fees.
+    **/
+    function changeBeneficiary(
+        address payable _beneficiary
+    )
+      external
+      onlyGov
+    {
+        beneficiary = _beneficiary;
     }
 
     /**

@@ -113,7 +113,6 @@ contract arShield {
      * @param _pToken The protocol token we're protecting.
      * @param _arToken The Armor token that the vault controls.
      * @param _uTokenLink ChainLink contract for the underlying token.
-     * @param _beneficiary Address that will receive excess tokens and automatic referral.
      * @param _fees Mint/redeem fees for each coverage base.
      * @param _covBases Addresses of the coverage bases to pay for coverage.
     **/
@@ -122,7 +121,6 @@ contract arShield {
         address _pToken,
         address _arToken,
         address _uTokenLink, 
-        address payable _beneficiary,
         uint256[] calldata _fees,
         address[] calldata _covBases
     )
@@ -130,12 +128,12 @@ contract arShield {
     {
         require(address(arToken) == address(0), "Contract already initialized.");
         uTokenLink = _uTokenLink;
-        beneficiary = _beneficiary;
 
         pToken = IERC20(_pToken);
         oracle = IOracle(_oracle);
         arToken = IArmorToken(_arToken);
         controller = IController(msg.sender);
+        beneficiary = controller.beneficiary();
 
         // CovBases and fees must always be the same length.
         require(_covBases.length == _fees.length, "Improper length array.");

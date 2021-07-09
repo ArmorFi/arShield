@@ -41,6 +41,19 @@
   },
   {
     "inputs": [],
+    "name": "beneficiary",
+    "outputs": [
+      {
+        "internalType": "address payable",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "bonus",
     "outputs": [
       {
@@ -50,6 +63,19 @@
       }
     ],
     "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address payable",
+        "name": "_beneficiary",
+        "type": "address"
+      }
+    ],
+    "name": "changeBeneficiary",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {

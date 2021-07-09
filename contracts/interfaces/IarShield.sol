@@ -8,7 +8,6 @@ interface IarShield {
         address _pToken,
         address _arToken,
         address _uTokenLink,
-        address payable _beneficiary,
         uint256[] calldata _fees,
         address[] calldata _covBases
     ) 

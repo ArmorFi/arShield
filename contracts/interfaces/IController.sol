@@ -7,4 +7,5 @@ interface IController {
     function refFee() external view returns (uint256);
     function governor() external view returns (address);
     function depositAmt() external view returns (uint256);
+    function beneficiary() external view returns (address payable);
 }
