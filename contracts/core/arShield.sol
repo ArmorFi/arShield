@@ -386,7 +386,9 @@ contract arShield {
         ethOwed += ethFees;
         tokensOwed += tokenFees;
 
-        // Add a bonus for liquidators (0.5% to start).
+        // Add a bonus for liquidators (0% to start).
+        // As it stands, this will lead to a small loss of arToken:pToken conversion immediately so in bigger
+        // amounts it could be taken advantage of, but we do not think real damage can happen given the small amounts.
         uint256 liqBonus = tokensOwed 
                            * controller.bonus()
                            / DENOMINATOR;
@@ -446,11 +448,12 @@ contract arShield {
             totalOwed += feesToLiq[i];
         }
 
-        // Add a bonus for liquidators (0.5% to start).
-        uint256 liqBonus = totalOwed 
-                            * controller.bonus()
-                            / DENOMINATOR;
-        totalOwed += liqBonus;
+        // Add a bonus for liquidators (0.5% to start). Removed for now.
+        /**uint256 liqBonus = totalOwed 
+                           * controller.bonus()
+                           / DENOMINATOR;
+
+        totalOwed += liqBonus;**/
         totalOwed += refTotal;
     }
 
@@ -551,12 +554,12 @@ contract arShield {
         userFee += refFee;
 
         // Add liquidator bonus.
-        uint256 liqBonus = (userFee - refFee) 
+        /**uint256 liqBonus = (userFee - refFee) 
                            * controller.bonus()
-                           / DENOMINATOR;
+                           / DENOMINATOR;**/
 
-        userFee += liqBonus;
-        totalFees += userFee + refTotal + liqBonus;
+        // userFee += liqBonus; <-- user not being charged liqBonus fee
+        totalFees += userFee + refTotal/* + liqBonus*/;
     }
 
     /**
