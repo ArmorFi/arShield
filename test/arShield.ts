@@ -76,12 +76,12 @@ describe("arShield", function () {
       it("should increase total fees", async function(){
         let totalFees = await arShield.totalFeeAmts();
         // mint fee + ref fee + liquidator bonus
-        expect(totalFees).to.be.equal("5012500000000000000");
+        expect(totalFees).to.be.equal("5000000000000000000");
       });
 
       it("should mint 1:1 with no pTokens in contract", async function(){
         let balance = await arToken.balanceOf( gov.getAddress() );
-        expect(balance).to.be.equal("994987500000000000000");
+        expect(balance).to.be.equal("995000000000000000000");
       });
 
       it("estimate cost", async function(){
@@ -95,7 +95,7 @@ describe("arShield", function () {
       it("should mint correctly with pTokens in contract", async function(){
         await arShield.connect(user).mint(ETHER.mul(1000), ZERO_ADDY);
         let userAr = await arToken.balanceOf( user.getAddress() );
-        expect(userAr).to.be.equal("994987500000000000000");
+        expect(userAr).to.be.equal("995000000000000000000");
 
         let shieldBal = await pToken.balanceOf( arShield.address );
         expect(shieldBal).to.be.equal( ETHER.mul(2000) );
@@ -130,7 +130,7 @@ describe("arShield", function () {
       // full mint: 1000 * 0.005 + (1000 * 0.0025 * 0.005)
 
       // subtract mint fees and you get 994.9875, repeat the above on that for redeem.
-      expect(diff).to.be.equal("990000125156250000000");
+      expect(diff).to.be.equal("990025000000000000000");
     });
 
     it("should redeem extra pTokens from contract", async function(){
@@ -146,7 +146,7 @@ describe("arShield", function () {
       expect(arBalance).to.be.equal(0);
 
       let diff = endBal.sub(balance);
-      expect(diff).to.be.equal("990000125156250000000");
+      expect(diff).to.be.equal("990025000000000000000");
 
       let pBal = await pToken.balanceOf(arShield.address);
     });
