@@ -1,5 +1,5 @@
 import "@nomiclabs/hardhat-waffle";
-import "solidity-coverage";
+import "@float-capital/solidity-coverage";
 import "hardhat-spdx-license-identifier";
 import "hardhat-log-remover";
 //import "hardhat-docgen";
@@ -50,15 +50,6 @@ export default {
         version: "0.6.6",
       },
       {
-        version:"0.5.16",
-        settings:{
-          optimizer: {
-            enabled: true,
-            runs: 999999
-          }
-        }
-      },
-      {
         version: "0.6.12",
         settings: {
           optimizer : {
@@ -72,7 +63,7 @@ export default {
         settings: {
           optimizer : {
             enabled: true,
-            runs: 200
+            runs: 20000
           }
         }
       }

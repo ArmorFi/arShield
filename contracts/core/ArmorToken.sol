@@ -134,8 +134,9 @@ contract ArmorToken {
         //  controller of this contract, which in most situations should be
         //  another open source smart contract or 0x0
 
+        // TAEK: this can be removed since we are 0.8
         // The standard ERC 20 transferFrom functionality
-        require(allowed[_from][msg.sender] >= _amount);
+        //require(allowed[_from][msg.sender] >= _amount);
         allowed[_from][msg.sender] -= _amount;
 
         doTransfer(_from, _to, _amount);
@@ -171,7 +172,8 @@ contract ArmorToken {
            // Then update the balance array with the new value for the address
            //  receiving the tokens
            uint256 previousBalanceTo = balanceOfAt(_to, block.number);
-           require(previousBalanceTo + _amount >= previousBalanceTo); // Check for overflow
+           // TAEK: this too can be removed since we are 0.8
+           //require(previousBalanceTo + _amount >= previousBalanceTo); // Check for overflow
            updateValueAtNow(balances[_to], previousBalanceTo + _amount);
 
            // An event to make the transfer easy to find on the blockchain

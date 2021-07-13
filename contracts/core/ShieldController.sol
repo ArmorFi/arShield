@@ -68,6 +68,7 @@ contract ShieldController is Governable {
       external
       onlyGov
     {
+        // TAEK : recommendation use Beacon instead of Each proxy
         address proxy = address( new OwnedUpgradeabilityProxy(_masterCopy) );
         address token = address( new ArmorToken(proxy, _name, _symbol) );
         

@@ -615,7 +615,9 @@ contract arShield {
       onlyGov
     {
         // low-level call to avoid push problems
-        payable(depositor).call{value: controller.depositAmt()}("");
+        // TAEK : fix. require of success
+        (bool success, ) = payable(depositor).call{value: controller.depositAmt()}("");
+        require(success, "eth send failed");
         delete depositor;
         payoutBlock = _payoutBlock;
         payoutAmt = _payoutAmt;
