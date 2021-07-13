@@ -9,7 +9,8 @@
     "lintNoFix": "eslint . && solium -d contracts/",
     "test": "NODE_OPTIONS='--max-old-space-size=4096' npx hardhat test",
     "test:mainnet": "NODE_OPTIONS='--max-old-space-size=4096' MAINNET_FORK=true npx hardhat test",
-    "coverage": "NODE_OPTIONS='--max-old-space-size=4096' npx hardhat coverage"
+    "coverage": "NODE_OPTIONS='--max-old-space-size=4096' npx hardhat coverage",
+    "coverage:mainnet": "NODE_OPTIONS='--max-old-space-size=4096' MAINNET_FORK=true npx hardhat coverage"
   },
   "repository": {
     "type": "git",
@@ -20,7 +21,7 @@
     "@float-capital/solidity-coverage": "^0.7.17",
     "bignumber.js": "9.0.1",
     "ethereumjs-util": "7.0.5",
-    "hardhat": "^2.3.3",
+    "hardhat": "^2.4.3",
     "openzeppelin-solidity": "^4.1.0",
     "solc": "^0.8.5"
   },
