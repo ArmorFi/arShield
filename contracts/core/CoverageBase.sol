@@ -82,9 +82,9 @@ contract CoverageBase is ArmorClient {
     function updateCoverage()
       external
     {
-        ArmorCore.deposit( address(this).balance );
+        ArmorCore.deposit(address(this).balance);
         uint256 available = getAvailableCover();
-        ArmorCore.subscribe( protocol, available );
+        ArmorCore.subscribe(protocol, available);
         totalCostPerSec = getCoverageCost(available);
         totalEthCoverage = available;
         checkpoint();
