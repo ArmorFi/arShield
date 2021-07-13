@@ -83,7 +83,7 @@ contract CoverageBase is ArmorClient {
       external
     {
         ArmorCore.deposit( address(this).balance );
-        uint256 available = ArmorCore.availableCover( protocol, getIdealCoverage() );
+        uint256 available = getAvailableCover();
         ArmorCore.subscribe( protocol, available );
         totalCostPerSec = getCoverageCost(available);
         totalEthCoverage = available;
@@ -167,19 +167,20 @@ contract CoverageBase is ArmorClient {
     }
     
     /**
-     * @notice Get the ideal amount of coverage for all shields' current values.
-     *         May be different from actual coverage if arCore does not have coverage available.
+     * @notice Get the available amount of coverage for all shields' current values.
     **/
-    function getIdealCoverage()
+    function getAvailableCover()
       public
       view
     returns(
         uint256
     )
     {
-        return totalEthValue 
-               * coverPct 
-               / DENOMINATOR;
+        uint256 ideal = totalEthValue 
+                        * coverPct 
+                        / DENOMINATOR;
+        return ArmorCore.availableCover(protocol, ideal);
+
     }
     
     /**
@@ -193,7 +194,7 @@ contract CoverageBase is ArmorClient {
         uint256
     )
     {
-        return ArmorCore.calculatePricePerSec( protocol, _amount );
+        return ArmorCore.calculatePricePerSec(protocol, _amount);
     }
     
     /**

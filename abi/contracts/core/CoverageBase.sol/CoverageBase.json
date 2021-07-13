@@ -153,14 +153,8 @@
     "type": "function"
   },
   {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "_amount",
-        "type": "uint256"
-      }
-    ],
-    "name": "getCoverageCost",
+    "inputs": [],
+    "name": "getAvailableCover",
     "outputs": [
       {
         "internalType": "uint256",
@@ -172,8 +166,14 @@
     "type": "function"
   },
   {
-    "inputs": [],
-    "name": "getIdealCoverage",
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "getCoverageCost",
     "outputs": [
       {
         "internalType": "uint256",
