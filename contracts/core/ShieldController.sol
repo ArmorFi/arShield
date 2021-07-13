@@ -26,12 +26,14 @@ contract ShieldController is Governable {
     // List of all arShields
     address[] private arShields;
 
-    constructor(
+    function initialize(
         uint256 _bonus,
         uint256 _refFee,
         uint256 _depositAmt
     )
+      external
     {
+        require(arShields.length == 0, "Contract already initialized.");
         initializeOwnable();
         bonus = _bonus;
         refFee = _refFee;

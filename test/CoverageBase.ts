@@ -20,7 +20,8 @@ describe("CoverageBase", function () {
     user = accounts[1];
 
     const CONTROLLER = await ethers.getContractFactory("ShieldController");
-    controller = await CONTROLLER.deploy(50, 10000, ETHER.mul(10));
+    controller = await CONTROLLER.deploy();
+    await controller.initialize(50, 10000, ETHER.mul(10));
     const COVBASE = await ethers.getContractFactory("TestCoverageBase");
     covBase = await COVBASE.deploy(controller.address, controller.address, 5000);
 

@@ -30,7 +30,8 @@ describe("arShield", function () {
     referrer = accounts[2];
 
     const CONTROLLER = await ethers.getContractFactory("ShieldController");
-    controller = await CONTROLLER.deploy(50, 10000, ETHER.mul(10));
+    controller = await CONTROLLER.deploy();
+    await controller.initialize(50, 10000, ETHER.mul(10));
     const SHIELD = await ethers.getContractFactory("arShield");
     masterCopy = await SHIELD.deploy();
     const COVBASE = await ethers.getContractFactory("MockCovBase");

@@ -24,11 +24,13 @@ describe("ShieldController", function () {
     user = accounts[1];
 
     const CONTROLLER = await ethers.getContractFactory("ShieldController");
-    controller = await CONTROLLER.deploy(50, 10000, ETHER.mul(10));
+    controller = await CONTROLLER.deploy();
+    await controller.initialize(50, 10000, ETHER.mul(10));
     const SHIELD = await ethers.getContractFactory("arShield");
     masterCopy = await SHIELD.deploy();
     const COVBASE = await ethers.getContractFactory("CoverageBase");
-    covBase = await COVBASE.deploy(controller.address, controller.address, 5000);
+    covBase = await COVBASE.deploy();
+    await covBase.initialize(controller.address, controller.address, 5000);
     const ORACLE = await ethers.getContractFactory("YearnOracle");
     oracle = await ORACLE.deploy();
     const PTOKEN = await ethers.getContractFactory("ERC20");

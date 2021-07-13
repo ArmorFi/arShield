@@ -60,12 +60,14 @@ contract CoverageBase is ArmorClient {
      * @param _protocol Address of the protocol to cover (from Nexus Mutual).
      * @param _coverPct Percent of the cover to purchase -- 10000 == 100%.
     **/
-    constructor(
+    function initialize(
         address _controller,
         address _protocol,
         uint256 _coverPct
     )
+      external
     {
+        require(protocol == address(0), "Contract already initialized.");
         controller = IController(_controller);
         protocol = _protocol;
         coverPct = _coverPct;
