@@ -30,6 +30,8 @@ contract CoverageBase is ArmorClient {
     uint256 public lastUpdate;
     // Total Ether value to be protecting in the contract.
     uint256 public totalEthValue;
+    // Separate variable from above because there may be less than coverPct coverage available.
+    uint256 public totalEthCoverage;
   
     // Value in Ether and last updates of each shield vault.
     mapping (address => ShieldStats) public shieldStats;
@@ -79,8 +81,10 @@ contract CoverageBase is ArmorClient {
       external
     {
         ArmorCore.deposit( address(this).balance );
-        ArmorCore.subscribe( protocol, getCoverage() );
-        totalCostPerSec = getCoverageCost();
+        uint256 available = ArmorCore.availableCover( protocol, getIdealCoverage() );
+        ArmorCore.subscribe( protocol, available );
+        totalCostPerSec = getCoverageCost(available);
+        totalEthCoverage = available;
         checkpoint();
     }
     
@@ -161,9 +165,10 @@ contract CoverageBase is ArmorClient {
     }
     
     /**
-     * @notice Get the amount of coverage for all shields' current values.
+     * @notice Get the ideal amount of coverage for all shields' current values.
+     *         May be different from actual coverage if arCore does not have coverage available.
     **/
-    function getCoverage()
+    function getIdealCoverage()
       public
       view
     returns(
@@ -177,15 +182,16 @@ contract CoverageBase is ArmorClient {
     
     /**
      * @notice Get the cost of coverage for all shields' current values.
+     * @param _amount The amount of coverage to get the cost of.
     **/
-    function getCoverageCost()
+    function getCoverageCost(uint256 _amount)
       public
       view
     returns(
         uint256
     )
     {
-        return ArmorCore.calculatePricePerSec( protocol, getCoverage() );
+        return ArmorCore.calculatePricePerSec( protocol, _amount );
     }
     
     /**
