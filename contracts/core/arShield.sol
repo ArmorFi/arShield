@@ -735,4 +735,17 @@ contract arShield {
         limit = _limit;
     }
 
+    /**
+     * @notice Cancel coverage if this shield is being deprecated.
+     * @param _covId Coverage base ID to cancel.
+    **/
+    function cancelCoverage(
+        uint256 _covId
+    )
+      external
+      onlyGov
+    {
+        covBases[_covId].updateShield(0);
+    }
+
 }
