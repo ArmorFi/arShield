@@ -531,9 +531,7 @@ contract arShield {
         // Find protocol fees for each coverage base.
         uint256 end = feePerBase.length;
         for (uint256 i = 0; i < end; i++) percent += feePerBase[i];
-        percent += controller.refFee() 
-                   * percent
-                   / DENOMINATOR;
+        percent += controller.refFee();
     }
 
     /**
@@ -568,7 +566,7 @@ contract arShield {
         }
 
         // Add referral fee.
-        refFee = userFee 
+        refFee = _pAmount 
                  * controller.refFee() 
                  / DENOMINATOR;
         userFee += refFee;
@@ -579,7 +577,7 @@ contract arShield {
                            / DENOMINATOR;**/
 
         // userFee += liqBonus; <-- user not being charged liqBonus fee
-        totalFees += userFee + refTotal/* + liqBonus*/;
+        totalFees += userFee + refTotal;
     }
 
     /**

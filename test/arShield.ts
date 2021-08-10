@@ -7,7 +7,7 @@ import { hasUncaughtExceptionCaptureCallback } from "process";
 const ETHER = BigNumber.from("1000000000000000000");
 const ZERO_ADDY = "0x0000000000000000000000000000000000000000";
 
-describe("arShield", function () {
+describe.only("arShield", function () {
   let accounts: Signer[];
   let gov : Signer;
   let user : Signer;
@@ -31,7 +31,7 @@ describe("arShield", function () {
 
     const CONTROLLER = await ethers.getContractFactory("ShieldController");
     controller = await CONTROLLER.deploy();
-    await controller.initialize(50, 10000, ETHER.mul(10));
+    await controller.initialize(50, 25, ETHER.mul(10));
     const SHIELD = await ethers.getContractFactory("arShield");
     masterCopy = await SHIELD.deploy();
     const COVBASE = await ethers.getContractFactory("MockCovBase");
