@@ -6,7 +6,7 @@ import '../interfaces/IOracle.sol';
 import '../interfaces/ICovBase.sol';
 import '../interfaces/IController.sol';
 import '../interfaces/IArmorToken.sol';
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 
 /**
@@ -24,6 +24,8 @@ contract arShield {
      *      - depositor should always be address(0) if contract is not locked.
      *      - totalTokens must always equal pToken.balanceOf( address(this) ) - (refTotal + sum(feesToLiq) ).
     **/
+
+    using SafeERC20 for IERC20;
 
     // Denominator for % fractions.
     uint256 constant DENOMINATOR = 10000;
@@ -173,7 +175,7 @@ contract arShield {
         ) = _findFees(_pAmount);
 
         uint256 arAmount = arValue(_pAmount - fee);
-        pToken.transferFrom(user, address(this), _pAmount);
+        pToken.safeTransferFrom(user, address(this), _pAmount);
         _saveFees(newFees, _referrer, refFee);
 
         // If this vault is capped in its coverage, we check whether the mint should be allowed, and update.
@@ -187,6 +189,15 @@ contract arShield {
         }
 
         arToken.mint(user, arAmount);
+        controller.emitAction(
+            msg.sender, 
+            _referrer, 
+            address(this), 
+            address(pToken),
+            _pAmount,
+            refFee,
+            true
+        );
         emit Mint(user, arAmount, block.timestamp);
     }
 
@@ -224,6 +235,15 @@ contract arShield {
         uint256 ethValue = getEthValue(pToken.balanceOf( address(this) ) - totalFees);
         for (uint256 i = 0; i < covBases.length; i++) covBases[i].updateShield(ethValue);
 
+        controller.emitAction(
+            msg.sender, 
+            _referrer, 
+            address(this), 
+            address(pToken),
+            pAmount,
+            refFee,
+            false
+        );
         emit Redemption(user, _arAmount, block.timestamp);
     }
 

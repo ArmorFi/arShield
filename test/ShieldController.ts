@@ -106,9 +106,15 @@ describe("ShieldController", function () {
         expect( parseInt(shield.lastUpdate) ).to.be.greaterThan(0);
       });
 
-      it("should add shield to arShields list", async function(){
+      it("should add shield to arShields, arTokens, shieldMapping", async function(){
         let shields = await controller.getShields();
         expect(shields[0]).to.be.equal(arShield.address);
+
+        let tokens = await controller.getTokens();
+        expect(tokens[0]).to.be.equal(arToken.address);
+
+        let shieldMap = await controller.shieldMapping(arShield.address);
+        expect(shieldMap).to.be.equal(true);
       });
 
       it("should add sender as governor", async function(){
@@ -120,6 +126,23 @@ describe("ShieldController", function () {
         let proxyShield = await ethers.getContractAt("OwnedUpgradeabilityProxy", arShield.address);
         let proxyOwner = await proxyShield.proxyOwner();
         expect(proxyOwner).to.be.equal( await gov.getAddress() );
+      });
+
+      it("should get all shields", async function(){
+        let shields = await controller.getShields();
+        expect(shields.length).to.be.equal(1);
+      });
+
+      it("should get all tokens", async function(){
+        let arTokenAddress = await arShield.arToken();
+        let tokens = await controller.connect(user).getTokens();
+        expect(tokens[0]).to.be.equal(arTokenAddress);
+      });
+
+      it("should get all balances", async function(){
+        let arTokenAddress = await arShield.arToken();
+        let balances = await controller.connect(user).getBalances(user.getAddress(), 0, 0);
+        expect(balances.toString()).to.be.equal(arTokenAddress+",0");
       });
 
   });
@@ -181,12 +204,19 @@ describe("ShieldController", function () {
 
       shields = await controller.getShields();
       expect(shields.length).to.be.equal(0);
+
+      let tokens = await controller.getTokens();
+      expect(tokens.length).to.be.equal(0);
+
+      let shieldMap = await controller.shieldMapping(shieldAddress);
+      expect(shieldMap).to.be.equal(false);
     });
 
     it("should not delete shield for rando", async function(){
       // Using controller address for funsies since the revertedWith is what matters.
       await expect(controller.connect(user).deleteShield(controller.address, 0)).to.be.revertedWith("msg.sender is not owner");
     });
+
   });
 
 });

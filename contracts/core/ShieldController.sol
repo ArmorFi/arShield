@@ -23,8 +23,24 @@ contract ShieldController is Governable {
     uint256 public depositAmt;
     // Default beneficiary of all shields.
     address payable public beneficiary;
-    // List of all arShields
+    // Mapping of arShields to determine if call is allowed.
+    mapping (address => bool) public shieldMapping;
+    // List of all arShields.
     address[] private arShields;
+    // List of all arTokens.
+    address[] private arTokens;
+
+    // Event sent from arShield for frontend to get all referrals from one source.
+    event ShieldAction(
+        address user, 
+        address indexed referral,
+        address indexed shield,
+        address indexed token,
+        uint256 amount,
+        uint256 refFee,
+        bool mint,
+        uint256 timestamp
+    ); 
 
     function initialize(
         uint256 _bonus,
@@ -43,6 +59,28 @@ contract ShieldController is Governable {
 
     // In case a token has Ether lost in it we need to be able to receive.
     receive() external payable {}
+
+    /**
+     * @notice Greatly helps frontend to have all shield referral events in one spot.
+     * @param _user The user making the contract interaction.
+     * @param _referral The referral of the contract interaction.
+     * @param _shield The address of the shield calling.
+     * @param _pToken The address of the token for the shield.
+    **/
+    function emitAction(
+        address _user,
+        address _referral,
+        address _shield,
+        address _pToken,
+        uint256 _amount,
+        uint256 _refFee,
+        bool _mint
+    )
+      external
+    {
+        require(shieldMapping[msg.sender] == true, "Only arShields may call emitEvents.");
+        emit ShieldAction(_user, _referral, _shield, _pToken, _amount, _refFee, _mint, block.timestamp);
+    }
 
     /**
      * @notice Create a new arShield from an already-created family.
@@ -82,7 +120,10 @@ contract ShieldController is Governable {
         
         for(uint256 i = 0; i < _covBases.length; i++) ICovBase(_covBases[i]).editShield(proxy, true);
 
+        arTokens.push(token);
         arShields.push(proxy);
+        shieldMapping[proxy] = true;
+
         OwnedUpgradeabilityProxy( payable(proxy) ).transferProxyOwnership(msg.sender);
     }
 
@@ -98,9 +139,13 @@ contract ShieldController is Governable {
       external
       onlyGov
     {
-        if (arShields[_idx] == _shield) delete arShields[_idx];
-        arShields[_idx] = arShields[arShields.length - 1];
-        arShields.pop();
+        if (arShields[_idx] == _shield) {
+            arShields[_idx] = arShields[arShields.length - 1];
+            arTokens[_idx] = arTokens[arTokens.length - 1];
+            arShields.pop();
+            arTokens.pop();
+            delete shieldMapping[_shield];
+        }
     }
 
     /**
@@ -186,6 +231,48 @@ contract ShieldController is Governable {
     )
     {
         shields = arShields;
+    }
+
+    /**
+     * @notice Get all arTokens.
+    **/
+    function getTokens()
+      external
+      view
+    returns(
+        address[] memory tokens
+    )
+    {
+        tokens = arTokens;
+    }
+
+    /**
+     * @notice Used by frontend to get a list of balances for the user in one call.
+     *         Start and end are included in case the list gets too long for the gas of one call.
+     * @param _user Address to get balances for.
+     * @param _start Start index of the arTokens list. Inclusive.
+     * @param _end End index of the arTokens list (if too high, defaults to length). Exclusive.
+    **/
+    function getBalances(
+        address _user, 
+        uint256 _start, 
+        uint256 _end
+    )
+      public
+      view
+    returns(
+        address[] memory tokens,
+        uint256[] memory balances
+    )
+    {
+        if (_end > arTokens.length || _end == 0) _end = arTokens.length;
+        tokens = new address[](_end - _start);
+        balances = new uint[](_end - _start);
+
+        for (uint256 i = _start; i < _end; i++) {
+            tokens[i] = arTokens[i];
+            balances[i] = ArmorToken(arTokens[i]).balanceOf(_user);
+        }
     }
 
 }

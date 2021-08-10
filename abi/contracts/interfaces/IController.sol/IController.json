@@ -39,6 +39,49 @@
     "type": "function"
   },
   {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_user",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "_referral",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "_shield",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "_pToken",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_amount",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_refFee",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bool",
+        "name": "_mint",
+        "type": "bool"
+      }
+    ],
+    "name": "emitAction",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
     "inputs": [],
     "name": "governor",
     "outputs": [
