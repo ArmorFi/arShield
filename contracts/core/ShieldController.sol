@@ -88,7 +88,7 @@ contract ShieldController is Governable {
      * @param _symbol Symbol of the armorToken to be created.
      * @param _oracle Address of the family's oracle contract to find token value.
      * @param _pToken Protocol token that the shield will use.
-     * @param _uTokenLink Address of the ChainLink contract for the underlying token.
+     * @param _umbrellaKey Umbrella key for pToken-USD
      * @param _masterCopy Mastercopy for the arShield proxy.
      * @param _fees Mint/redeem fee for each coverage base.
      * @param _covBases Coverage bases that the shield will subscribe to.
@@ -98,7 +98,7 @@ contract ShieldController is Governable {
         string calldata _symbol,
         address _oracle,
         address _pToken,
-        address _uTokenLink,
+        bytes32 _umbrellaKey,
         address _masterCopy,
         uint256[] calldata _fees,
         address[] calldata _covBases
@@ -113,7 +113,7 @@ contract ShieldController is Governable {
             _oracle,
             _pToken,
             token,
-            _uTokenLink,
+            _umbrellaKey,
             _fees,
             _covBases
         );
