@@ -1,20 +1,16 @@
 import { expect } from "chai";
 import hre, { ethers } from "hardhat";
-import { Contract, Signer, BigNumber, constants } from "ethers";
-import { increase, getTimestamp } from "./utils";
-import { Address } from "ethereumjs-util";
-
-const {
+import { Contract, Signer, BigNumber } from "ethers";
+import {
   LeafKeyCoder,
-  LeafValueCoder,
-  SortedMerkleTree,
   APIClient,
-  ChainContract,
   ContractRegistry,
+  ChainContract,
   ABI
-} = require('@umb-network/toolbox');
+} from '@umb-network/toolbox';
 
 const ETHER = BigNumber.from("1000000000000000000");
+
 if(process.env.ROPSTEN_FORK) {
   describe.only("umbrella oracle_onchain", function () {
     let accounts: Signer[];
@@ -28,7 +24,7 @@ if(process.env.ROPSTEN_FORK) {
     let covBase: Contract;
     let uTokenLink: String;
     let arShield: Contract;
-    let apiClient: typeof APIClient;
+    let apiClient: APIClient;
     let lastBlockId: number;
 
     let umbrellaRegistryAddress = '0x968A798Be3F73228c66De06f7D1109D8790FB64D';
@@ -59,7 +55,7 @@ if(process.env.ROPSTEN_FORK) {
 
       apiClient = new APIClient({
         baseURL: 'https://api.umb.network',
-        umbrellaChainContract,
+        chainContract: new ChainContract(hre.ethers.provider, umbrellaChainContract.address),
         apiKey: '9ee5e662a5f425dc103a6c04a91e4973bcca93ea74c8f2be8e08124067b33c7b',
       });
 
@@ -69,33 +65,57 @@ if(process.env.ROPSTEN_FORK) {
     describe("#getEthPrice", function () {
       it('check', async function() {
         const ethPrice = (await umbrellaChainContract.getCurrentValue(ETH_USD_KEY)).value;
+        console.log(ethPrice.toString())
         expect(await oracle.getEthPrice()).to.be.equal(ethPrice)
       })
     });
 
     describe("#getTokensOwed", function () {
+      let leaves;
+
+      before(async function() {
+        leaves = await apiClient.getLeavesOfBlock(lastBlockId)
+      })
+
       for (let i = 0; i < yTokenKeys.length; i += 1) {
         it("check", async function() {
-          const proofData = await apiClient.getProofs([yTokenKeys[i]])
-          console.log(lastBlockId)
-          console.log(proofData)
-          const res = await oracle.getTokensOwed(
+          const proofData = leaves.find(data => data.key === yTokenKeys[i])
+          const tokenOwed = await oracle.getTokensOwed(
             ETHER,
             LeafKeyCoder.encode(yTokenKeys[i]),
-            proofData.leaves[0].proof,
-            proofData.leaves[0].value
+            proofData.proof,
+            proofData.value
           );
+
+          const ethPrice = (await umbrellaChainContract.getCurrentValue(ETH_USD_KEY)).value;
+          expect(ethPrice.mul(ETHER).div(BigNumber.from(proofData.value))).to.be.equal(tokenOwed)
+          console.log(tokenOwed.toString())
         });
       }
     });
-    // describe("#getEthOwed", function () {
-    //   for(let i = 0; i<yTokenList.length; i++){
-    //     it("check", async function(){
-    //       const res = await oracle.getEthOwed(ETHER, yTokenList[i], link[i]);
-    //       console.log(res.toString());
-    //       console.log(ETHER.toString());
-    //     });
-    //   }
-    // });
+
+    describe("#getEthOwed", function () {
+      let leaves;
+
+      before(async function() {
+        leaves = await apiClient.getLeavesOfBlock(lastBlockId)
+      })
+
+      for(let i = 0; i < yTokenKeys.length; i += 1) {
+        it("check", async function(){
+          const proofData = leaves.find(data => data.key === yTokenKeys[i])
+          const ethOwed = await oracle.getEthOwed(
+            ETHER,
+            LeafKeyCoder.encode(yTokenKeys[i]),
+            proofData.proof,
+            proofData.value
+          );
+
+          const ethPrice = (await umbrellaChainContract.getCurrentValue(ETH_USD_KEY)).value;
+          expect(BigNumber.from(proofData.value).mul(ETHER).div(ethPrice)).to.be.equal(ethOwed)
+          console.log(ethOwed.toString())
+        });
+      }
+    });
   });
 }

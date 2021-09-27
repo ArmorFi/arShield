@@ -78,7 +78,7 @@ contract UmbrellaOracle is Ownable, IOracle {
     ) external view override returns (uint256 ethOwed) {
         _verifyUmbrellaProof(_yKey, _tokenProof, _tokenValue);
 
-        uint256 ethOwed = (_tokensOwed * _tokenValue.toUint()) / getEthPrice();
+        ethOwed = (_tokensOwed * _tokenValue.toUint()) / getEthPrice();
     }
 
     /**
