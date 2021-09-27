@@ -19,36 +19,23 @@ contract UmbrellaOracle is Ownable, IOracle {
 
     IRegistry public immutable umbrellaRegistry;
     bytes32 public ethUmbrellaKey;
-    uint32 public blockOffset;
 
-    constructor(
-        address _umbrellaRegistry,
-        bytes32 _ethUmbrellaKey,
-        uint32 _blockOffset
-    ) {
+    constructor(address _umbrellaRegistry, bytes32 _ethUmbrellaKey) {
         require(_umbrellaRegistry != address(0), "zero address");
         umbrellaRegistry = IRegistry(_umbrellaRegistry);
         ethUmbrellaKey = _ethUmbrellaKey;
-
-        blockOffset = _blockOffset;
-    }
-
-    function setBlockOffset(uint32 _blockOffset) external onlyOwner {
-        blockOffset = _blockOffset;
     }
 
     function _verifyUmbrellaProof(
         bytes32 tokenKey,
-        uint32 blockId,
         bytes32[] calldata _proof,
         bytes memory _value
     ) private view {
         IChain chain = _chain();
         uint32 lastBlockId = chain.getLatestBlockId();
-        require(blockId + blockOffset >= lastBlockId, "too old");
 
         bool success = chain.verifyProofForBlock(
-            uint256(blockId),
+            uint256(lastBlockId),
             _proof,
             abi.encodePacked(tokenKey),
             _value
@@ -60,7 +47,6 @@ contract UmbrellaOracle is Ownable, IOracle {
      * @notice Get the amount of tokens owed for the input amount of Ether.
      * @param _ethOwed Amount of Ether that the shield owes to coverage base.
      * @param _yKey Umbrella key for yToken-USD
-     * @param _blockId Block Id of proof.
      * @param _tokenProof Umbrella proof for yToken.
      * @param _tokenValue Umbrella price value of yToken.
      * @return yOwed Amount of Yearn token owed for this amount of Ether.
@@ -68,11 +54,10 @@ contract UmbrellaOracle is Ownable, IOracle {
     function getTokensOwed(
         uint256 _ethOwed,
         bytes32 _yKey,
-        uint32 _blockId,
         bytes32[] calldata _tokenProof,
         bytes calldata _tokenValue
     ) external view override returns (uint256 yOwed) {
-        _verifyUmbrellaProof(_yKey, _blockId, _tokenProof, _tokenValue);
+        _verifyUmbrellaProof(_yKey, _tokenProof, _tokenValue);
         uint256 uOwed = _ethOwed * getEthPrice();
         yOwed = uOwed / _tokenValue.toUint();
     }
@@ -81,7 +66,6 @@ contract UmbrellaOracle is Ownable, IOracle {
      * @notice Get the Ether owed for an amount of tokens that must be paid for.
      * @param _tokensOwed Amounts of tokens to find value of.
      * @param _yKey Umbrella key for yToken-USD
-     * @param _blockId Block Id of proof.
      * @param _tokenProof Umbrella proof for yToken.
      * @param _tokenValue Umbrella price value of yToken.
      * @return ethOwed Amount of Ether owed for this amount of tokens.
@@ -89,11 +73,10 @@ contract UmbrellaOracle is Ownable, IOracle {
     function getEthOwed(
         uint256 _tokensOwed,
         bytes32 _yKey,
-        uint32 _blockId,
         bytes32[] calldata _tokenProof,
         bytes calldata _tokenValue
     ) external view override returns (uint256 ethOwed) {
-        _verifyUmbrellaProof(_yKey, _blockId, _tokenProof, _tokenValue);
+        _verifyUmbrellaProof(_yKey, _tokenProof, _tokenValue);
 
         uint256 ethOwed = (_tokensOwed * _tokenValue.toUint()) / getEthPrice();
     }

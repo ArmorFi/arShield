@@ -155,14 +155,12 @@ contract arShield {
      *      - Important: must save all fees correctly.
      * @param _pAmount Amount of pTokens to deposit to the contract.
      * @param _referrer The address that referred the user to arShield.
-     * @param _blockId Block Id of proof.
      * @param _tokenProof Umbrella proof for yToken.
      * @param _tokenValue Umbrella price value of yToken.
     **/
     function mint(
         uint256 _pAmount,
         address _referrer,
-        uint32 _blockId,
         bytes32[] calldata _tokenProof,
         bytes calldata _tokenValue
     )
@@ -180,13 +178,13 @@ contract arShield {
          uint256[] memory newFees
         ) = _findFees(__pAmount);
 
-        uint256 arAmount = arValue(__pAmount - fee, _blockId, _tokenProof, _tokenValue);
+        uint256 arAmount = arValue(__pAmount - fee, _tokenProof, _tokenValue);
         pToken.safeTransferFrom(user, address(this), __pAmount);
         _saveFees(newFees, _referrer, refFee);
 
         // If this vault is capped in its coverage, we check whether the mint should be allowed, and update.
         if (capped) {
-            uint256 ethValue = getEthValue(pToken.balanceOf( address(this) ) - totalFees, _blockId, _tokenProof, _tokenValue);
+            uint256 ethValue = getEthValue(pToken.balanceOf( address(this) ) - totalFees, _tokenProof, _tokenValue);
             require(checkCapped(ethValue), "Not enough coverage available.");
 
             // If we don't update here, two shields could get big deposits at the same time and allow both when it shouldn't.
@@ -215,21 +213,19 @@ contract arShield {
      *      - Important: must save all fees correctly.
      * @param _arAmount Amount of arTokens to redeem.
      * @param _referrer The address that referred the user to arShield.
-     * @param _blockId Block Id of proof.
      * @param _tokenProof Umbrella proof for yToken.
      * @param _tokenValue Umbrella price value of yToken.
     **/
     function redeem(
         uint256 _arAmount,
         address _referrer,
-        uint32 _blockId,
         bytes32[] calldata _tokenProof,
         bytes calldata _tokenValue
     )
       external
     {
         address user = msg.sender;
-        uint256 pAmount = pValue(_arAmount, _blockId, _tokenProof, _tokenValue);
+        uint256 pAmount = pValue(_arAmount, _tokenProof, _tokenValue);
         arToken.transferFrom(user, address(this), _arAmount);
         arToken.burn(_arAmount);
         
@@ -244,7 +240,7 @@ contract arShield {
         _saveFees(newFees, _referrer, refFee);
 
         // If we don't update this here, users will get stuck paying for coverage that they are not using.
-        uint256 ethValue = getEthValue(pToken.balanceOf( address(this) ) - totalFees, _blockId, _tokenProof, _tokenValue);
+        uint256 ethValue = getEthValue(pToken.balanceOf( address(this) ) - totalFees, _tokenProof, _tokenValue);
         for (uint256 i = 0; i < covBases.length; i++) covBases[i].updateShield(ethValue);
 
         controller.emitAction(
@@ -266,13 +262,11 @@ contract arShield {
      *      - Must adjust fees correctly afterwards.
      *      - Must not allow any extra to be sold than what's needed.
      * @param _covId covBase ID that we are liquidating.
-     * @param _blockId Block Id of proof.
      * @param _tokenProof Umbrella proof for yToken.
      * @param _tokenValue Umbrella price value of yToken.
     **/
     function liquidate(
         uint256 _covId,
-        uint32 _blockId,
         bytes32[] calldata _tokenProof,
         bytes calldata _tokenValue
     )
@@ -284,7 +278,7 @@ contract arShield {
          uint256 ethOwed, 
          uint256 tokensOwed,
          uint256 tokenFees
-        ) = liqAmts(_covId, _blockId, _tokenProof, _tokenValue);
+        ) = liqAmts(_covId, _tokenProof, _tokenValue);
         require(msg.value <= ethOwed, "Too much Ether paid.");
 
         // Determine eth value and amount of tokens to pay?
@@ -297,7 +291,6 @@ contract arShield {
             ethOwed,
             tokensOwed,
             tokenFees,
-            _blockId,
             _tokenProof,
             _tokenValue
         );
@@ -349,14 +342,12 @@ contract arShield {
      * @notice Inverse of arValue (find yToken value of arToken amount).
      * @dev - Must convert correctly in any scenario.
      * @param _arAmount Amount of arTokens to find yToken value of.
-     * @param _blockId Block Id of proof.
      * @param _tokenProof Umbrella proof for yToken.
      * @param _tokenValue Umbrella price value of yToken.
      * @return pAmount Amount of pTokens the input arTokens are worth.
     **/
     function pValue(
         uint256 _arAmount,
-        uint32 _blockId,
         bytes32[] calldata _tokenProof,
         bytes calldata _tokenValue
     )
@@ -369,7 +360,7 @@ contract arShield {
         uint256 totalSupply = arToken.totalSupply();
         if (totalSupply == 0) return _arAmount;
 
-        pAmount = ( pToken.balanceOf( address(this) ) - totalFeeAmts(_blockId, _tokenProof, _tokenValue) )
+        pAmount = ( pToken.balanceOf( address(this) ) - totalFeeAmts(_tokenProof, _tokenValue) )
                   * _arAmount 
                   / totalSupply;
     }
@@ -378,14 +369,12 @@ contract arShield {
      * @notice Find the arToken value of a pToken amount.
      * @dev - Must convert correctly in any scenario.
      * @param _pAmount Amount of yTokens to find arToken value of.
-     * @param _blockId Block Id of proof.
      * @param _tokenProof Umbrella proof for yToken.
      * @param _tokenValue Umbrella price value of yToken.
      * @return arAmount Amount of arToken the input pTokens are worth.
     **/
     function arValue(
         uint256 _pAmount,
-        uint32 _blockId,
         bytes32[] calldata _tokenProof,
         bytes calldata _tokenValue
     )
@@ -400,14 +389,13 @@ contract arShield {
 
         arAmount = arToken.totalSupply()
                    * _pAmount 
-                   / ( balance - totalFeeAmts(_blockId, _tokenProof, _tokenValue) );
+                   / ( balance - totalFeeAmts(_tokenProof, _tokenValue) );
     }
 
     /**
      * @notice Amounts owed to be liquidated.
      * @dev - Must always return correct amounts that can currently be liquidated.
      * @param _covId Coverage Base ID lol
-     * @param _blockId Block Id of proof.
      * @param _tokenProof Umbrella proof for yToken.
      * @param _tokenValue Umbrella price value of yToken.
      * @return ethOwed Amount of Ether owed to coverage base.
@@ -416,7 +404,6 @@ contract arShield {
     **/
     function liqAmts(
         uint256 _covId,
-        uint32 _blockId,
         bytes32[] calldata _tokenProof,
         bytes calldata _tokenValue
     )
@@ -431,7 +418,7 @@ contract arShield {
         // Find amount owed in Ether, find amount owed in protocol tokens.
         // If nothing is owed to coverage base, don't use getTokensOwed.
         ethOwed = covBases[_covId].getShieldOwed( address(this) );
-        if (ethOwed > 0) tokensOwed = oracle.getTokensOwed(ethOwed, umbrellaKey, _blockId, _tokenProof, _tokenValue);
+        if (ethOwed > 0) tokensOwed = oracle.getTokensOwed(ethOwed, umbrellaKey, _tokenProof, _tokenValue);
 
         tokenFees = feesToLiq[_covId];
         require(tokensOwed + tokenFees > 0, "No fees are owed.");
@@ -441,7 +428,7 @@ contract arShield {
                             ethOwed
                             * tokenFees
                             / tokensOwed
-                          : getEthValue(tokenFees, _blockId, _tokenProof, _tokenValue);
+                          : getEthValue(tokenFees, _tokenProof, _tokenValue);
         ethOwed += ethFees;
         tokensOwed += tokenFees;
 
@@ -463,7 +450,6 @@ contract arShield {
         uint256 _ethOwed,
         uint256 _tokensOwed,
         uint256 _tokenFees,
-        uint32 _blockId,
         bytes32[] calldata _tokenProof,
         bytes calldata _tokenValue
     )
@@ -487,7 +473,7 @@ contract arShield {
 
         // Ether value of all of the contract minus what we're liquidating.
         ethValue = (pToken.balanceOf( address(this) ) 
-                    - totalFeeAmts(_blockId, _tokenProof, _tokenValue))
+                    - totalFeeAmts(_tokenProof, _tokenValue))
                    * _ethOwed
                    / _tokensOwed;
     }
@@ -495,13 +481,11 @@ contract arShield {
     /**
      * @notice Find total amount of tokens that are not to be covered (ref fees, tokens to liq, liquidator bonus).
      * @dev - Must always return correct total fees owed.
-     * @param _blockId Block Id of proof.
      * @param _tokenProof Umbrella proof for yToken.
      * @param _tokenValue Umbrella price value of yToken.
      * @return totalOwed Total amount of tokens owed in fees.
     **/
     function totalFeeAmts(
-        uint32 _blockId,
         bytes32[] calldata _tokenProof,
         bytes calldata _tokenValue
     )
@@ -513,7 +497,7 @@ contract arShield {
     {
         for (uint256 i = 0; i < covBases.length; i++) {
             uint256 ethOwed = covBases[i].getShieldOwed( address(this) );
-            if (ethOwed > 0) totalOwed += oracle.getTokensOwed(ethOwed, umbrellaKey, _blockId, _tokenProof, _tokenValue);
+            if (ethOwed > 0) totalOwed += oracle.getTokensOwed(ethOwed, umbrellaKey, _tokenProof, _tokenValue);
             totalOwed += feesToLiq[i];
         }
 
@@ -553,14 +537,12 @@ contract arShield {
      * @notice Find the Ether value of a certain amount of pTokens.
      * @dev - Must return correct Ether value for _pAmount.
      * @param _pAmount The amount of pTokens to find Ether value for.
-     * @param _blockId Block Id of proof.
      * @param _tokenProof Umbrella proof for yToken.
      * @param _tokenValue Umbrella price value of yToken.
      * @return ethValue Ether value of the pTokens (in Wei).
     **/
     function getEthValue(
         uint256 _pAmount,
-        uint32 _blockId,
         bytes32[] calldata _tokenProof,
         bytes calldata _tokenValue
     )
@@ -570,7 +552,7 @@ contract arShield {
         uint256 ethValue
     )
     {
-        ethValue = oracle.getEthOwed(_pAmount, umbrellaKey, _blockId, _tokenProof, _tokenValue);
+        ethValue = oracle.getEthOwed(_pAmount, umbrellaKey, _tokenProof, _tokenValue);
     }
 
     /**
