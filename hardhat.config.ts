@@ -18,15 +18,26 @@ let hardhatSettings:any = {
 
 if (process.env.MAINNET_FORK) {
   hardhatSettings = {
-      gas: 10000000,
-      chainId: 1,
-      accounts: {
-        accountsBalance: "1000000000000000000000000"
-      },
+    gas: 10000000,
+    chainId: 1,
+    accounts: {
+      accountsBalance: "1000000000000000000000000"
+    },
     forking: { url: "https://eth-mainnet.alchemyapi.io/v2/90dtUWHmLmwbYpvIeC53UpAICALKyoIu", blockNumber: 12633224 },
-      allowUnlimitedContractSize: true,
-      timeout: 6000000
-    };
+    allowUnlimitedContractSize: true,
+    timeout: 6000000
+  };
+} else if (process.env.ROPSTEN_FORK) {
+  hardhatSettings = {
+    gas: 10000000,
+    chainId: 3,
+    accounts: {
+      accountsBalance: "1000000000000000000000000"
+    },
+    forking: { url: "https://eth-ropsten.alchemyapi.io/v2/IB8RoveNkI7bG2LICIoBwGvRECUEyf3f", blockNumber:11110322 },
+    allowUnlimitedContractSize: true,
+    timeout: 6000000
+  };
 }
 export default {
   spdxLicenseIdentifier: {

@@ -4,8 +4,14 @@ import { Contract, Signer, BigNumber, constants } from "ethers";
 import { increase, getTimestamp, mine } from "./utils";
 import { Address } from "ethereumjs-util";
 import { hasUncaughtExceptionCaptureCallback } from "process";
+import {
+  LeafKeyCoder,
+} from '@umb-network/toolbox';
+
 const ETHER = BigNumber.from("1000000000000000000");
 const ZERO_ADDY = "0x0000000000000000000000000000000000000000";
+
+const yDAI_USD_KEY = 'ZRX-USD'
 
 describe.only("arShield", function () {
   let accounts: Signer[];
@@ -18,7 +24,6 @@ describe.only("arShield", function () {
   let controller: Contract;
   let oracle: Contract;
   let covBase: Contract;
-  let uTokenLink: String;
   let arShield: Contract;
 
   // mock yearn and mock oracle? Probably best
@@ -37,7 +42,7 @@ describe.only("arShield", function () {
     const COVBASE = await ethers.getContractFactory("MockCovBase");
     covBase = await COVBASE.deploy(controller.address);
     //const ORACLE = await ethers.getContractFactory("YearnOracle");
-    const ORACLE = await ethers.getContractFactory("MockYearn");
+    const ORACLE = await ethers.getContractFactory("MockUmbrella");
     oracle = await ORACLE.deploy();
     const PTOKEN = await ethers.getContractFactory("MockERC20");
     pToken = await PTOKEN.deploy("yDAI","Yearn DAI");
@@ -45,14 +50,13 @@ describe.only("arShield", function () {
     await pToken.connect(gov).mint(ETHER.mul(100000));
     await pToken.connect(gov).transfer(user.getAddress(), ETHER.mul(100000));
     // Not needed for these tests so making it a random address.
-    uTokenLink = oracle.address;
 
     await controller.connect(gov).createShield(
       "Armor yDAI", 
       "armorYDAI",
       oracle.address,
       pToken.address,
-      uTokenLink,
+      LeafKeyCoder.encode(yDAI_USD_KEY),
       masterCopy.address, 
       [25],
       [covBase.address]
@@ -71,17 +75,17 @@ describe.only("arShield", function () {
     beforeEach(async function() {
       await pToken.connect(gov).approve( arShield.address, ETHER.mul(100000) );
       await pToken.connect(user).approve( arShield.address, ETHER.mul(100000) );
-      await arShield.connect(gov).mint(ETHER.mul(1000), ZERO_ADDY);
+      await arShield.connect(gov).mint(ETHER.mul(1000), ZERO_ADDY, [], 0);
     });
 
       it("should increase total fees", async function(){
-        let totalFees = await arShield.totalFeeAmts();
+        let totalFees = await arShield.totalFeeAmts([], 0);
         // mint fee + ref fee + liquidator bonus
         expect(totalFees).to.be.equal("5000000000000000000");
       });
 
       it("should emit referral event", async function(){
-        await expect( arShield.connect(gov).mint(ETHER.mul(1000), ZERO_ADDY) ).to.emit(controller, 'ShieldAction');
+        await expect( arShield.connect(gov).mint(ETHER.mul(1000), ZERO_ADDY, [], 0) ).to.emit(controller, 'ShieldAction');
       });
 
       it("should mint 1:1 with no pTokens in contract", async function(){
@@ -93,12 +97,12 @@ describe.only("arShield", function () {
         await arShield.connect(gov).changeCapped(true);
         await covBase.connect(gov).changeAllowed(true);
         let firstBal = await user.getBalance();
-        let pendingMint = await arShield.connect(user).mint(ETHER.mul(1000), ZERO_ADDY);
+        let pendingMint = await arShield.connect(user).mint(ETHER.mul(1000), ZERO_ADDY, [], 0);
         let lastBal = await user.getBalance();
       });
       
       it("should mint correctly with pTokens in contract", async function(){
-        await arShield.connect(user).mint(ETHER.mul(1000), ZERO_ADDY);
+        await arShield.connect(user).mint(ETHER.mul(1000), ZERO_ADDY, [], 0);
         let userAr = await arToken.balanceOf( user.getAddress() );
         expect(userAr).to.be.equal("995000000000000000000");
 
@@ -113,7 +117,7 @@ describe.only("arShield", function () {
     beforeEach(async function() {
       await pToken.approve( arShield.address, ETHER.mul(100000) );
       await pToken.connect(user).approve( arShield.address, ETHER.mul(100000) );
-      await arShield.connect(gov).mint(ETHER.mul(1000), ZERO_ADDY);
+      await arShield.connect(gov).mint(ETHER.mul(1000), ZERO_ADDY, [], 0);
       await arToken.approve( arShield.address, ETHER.mul(100000) );
     });
 
@@ -121,7 +125,7 @@ describe.only("arShield", function () {
       let balance = await pToken.balanceOf( gov.getAddress() );
       let arBal = await arToken.balanceOf( gov.getAddress() );
 
-      await arShield.redeem(arBal, ZERO_ADDY);
+      await arShield.redeem(arBal, ZERO_ADDY, [], 0);
 
       let endBal = await pToken.balanceOf( gov.getAddress() );
       let arBalance = await arToken.balanceOf( gov.getAddress() );
@@ -139,12 +143,12 @@ describe.only("arShield", function () {
     });
 
     it("should redeem extra pTokens from contract", async function(){
-      await arShield.connect(user).mint(ETHER.mul(1000), ZERO_ADDY);
+      await arShield.connect(user).mint(ETHER.mul(1000), ZERO_ADDY, [], 0);
       let balance = await pToken.balanceOf( user.getAddress() );
       let arBal = await arToken.balanceOf( user.getAddress() );
 
       await arToken.connect(user).approve( arShield.address, ETHER.mul(100000) );
-      await arShield.connect(user).redeem(arBal, ZERO_ADDY);
+      await arShield.connect(user).redeem(arBal, ZERO_ADDY, [], 0);
 
       let endBal = await pToken.balanceOf( user.getAddress() );
       let arBalance = await arToken.balanceOf( user.getAddress() );
@@ -157,8 +161,8 @@ describe.only("arShield", function () {
     });
 
     it("should emit referral event", async function(){
-      await arShield.connect(gov).mint(ETHER.mul(1000), ZERO_ADDY);
-      await expect( arShield.connect(gov).redeem(ETHER.mul(1000), ZERO_ADDY) ).to.emit(controller, 'ShieldAction');
+      await arShield.connect(gov).mint(ETHER.mul(1000), ZERO_ADDY, [], 0);
+      await expect( arShield.connect(gov).redeem(ETHER.mul(1000), ZERO_ADDY, [], 0) ).to.emit(controller, 'ShieldAction');
     });
 
   });
@@ -167,7 +171,7 @@ describe.only("arShield", function () {
 
     beforeEach(async function() {
       await pToken.approve( arShield.address, ETHER.mul(100000) );
-      await arShield.mint(ETHER.mul(1000), ZERO_ADDY);
+      await arShield.mint(ETHER.mul(1000), ZERO_ADDY, [], 0);
       await oracle.changeEthOwed(ETHER);
     });
 
@@ -179,7 +183,7 @@ describe.only("arShield", function () {
       tokensOwed = tokensOwed.add(tokensOwed.div(200));
       let tokenFees = ETHER.mul(25).div(10);
 
-      let liqAmt = await arShield.liqAmts(0);
+      let liqAmt = await arShield.liqAmts(0, [], 0);
       // 1 Ether, 2.5 tokens (0.25%) liq fees, 2.5 + 0.5% total tokens owed
       expect(liqAmt[0]).to.be.equal(ethOwed);
       expect(liqAmt[1]).to.be.equal(tokensOwed);
@@ -187,7 +191,7 @@ describe.only("arShield", function () {
     });
 
     it("should liquidate full liqAmts with 0 tokens owed, send to covBase, adjust liqAmts", async function() {
-      await arShield.liquidate(0, {value: ETHER});
+      await arShield.liquidate(0, [], 0,  {value: ETHER});
 
       let bal = await pToken.balanceOf( gov.getAddress() );
       expect(bal).to.be.equal("99002512500000000000000");
@@ -201,7 +205,7 @@ describe.only("arShield", function () {
     });
 
     it("should liquidate half of liqAmts with 0 tokens owed", async function() {
-      await arShield.liquidate(0, {value: ETHER.div(2)});
+      await arShield.liquidate(0, [], 0, {value: ETHER.div(2)});
       let bal = await pToken.balanceOf( gov.getAddress() );
       expect(bal).to.be.equal("99001256250000000000000");
     });      
@@ -211,12 +215,12 @@ describe.only("arShield", function () {
       // 10 tokens given the value of 0.1 ETHER
       await oracle.changeTokensOwed(ETHER.mul(10));
 
-      let liqAmt = await arShield.liqAmts(0);
-      await arShield.liquidate(0, {value: liqAmt[0].toString()})
+      let liqAmt = await arShield.liqAmts(0, [], 0);
+      await arShield.liquidate(0, [], 0, {value: liqAmt[0].toString()})
     });
 
     it("should fail on too much Ether", async function() {
-      await expect(arShield.liquidate(0, {value: ETHER.mul(2)})).to.be.revertedWith("Too much Ether paid.");
+      await expect(arShield.liquidate(0, [], 0, {value: ETHER.mul(2)})).to.be.revertedWith("Too much Ether paid.");
     });
 
   });
@@ -225,7 +229,7 @@ describe.only("arShield", function () {
 
     beforeEach(async function() {
       await pToken.approve( arShield.address, ETHER.mul(100000) );
-      await arShield.mint(ETHER.mul(1000), ZERO_ADDY);
+      await arShield.mint(ETHER.mul(1000), ZERO_ADDY, [], 0);
     });
     
       it("should pause upon correct deposit and set correct variables", async function() {
@@ -289,7 +293,7 @@ describe.only("arShield", function () {
 
     beforeEach(async function() {
       await pToken.approve( arShield.address, ETHER.mul(100000) );
-      await arShield.mint(ETHER.mul(1000), ZERO_ADDY);
+      await arShield.mint(ETHER.mul(1000), ZERO_ADDY, [], 0);
       await pToken.connect(user).approve( arShield.address, ETHER.mul(1000) );
     });
 
@@ -312,7 +316,7 @@ describe.only("arShield", function () {
 
     beforeEach(async function() {
       await pToken.approve( arShield.address, ETHER.mul(100000) );
-      await arShield.mint(ETHER.mul(1000), ZERO_ADDY);
+      await arShield.mint(ETHER.mul(1000), ZERO_ADDY, [], 0);
     });
 
     it("should be able to change fees", async function() {
@@ -342,12 +346,12 @@ describe.only("arShield", function () {
 
     beforeEach(async function() {
       await pToken.approve( arShield.address, ETHER.mul(100000) );
-      await arShield.mint(ETHER.mul(1000), ZERO_ADDY);
+      await arShield.mint(ETHER.mul(1000), ZERO_ADDY, [], 0);
     });
 
     it("should limit deposits correctly", async function() {
       await arShield.connect(gov).changeLimit(ETHER.mul(1001));
-      await expect(arShield.mint(ETHER.mul(2), ZERO_ADDY)).to.be.revertedWith("Too much value in the shield.");
+      await expect(arShield.mint(ETHER.mul(2), ZERO_ADDY, [], 0)).to.be.revertedWith("Too much value in the shield.");
     });
 
     it("should find fees correctly", async function() {
